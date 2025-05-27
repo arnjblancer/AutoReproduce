@@ -1,5 +1,7 @@
 # AutoReproduce
 
+[![🤗 Benchmark (HuggingFace)](https://img.shields.io/badge/Dataset-HuggingFace-FFD21E.svg?logo=huggingface&logoColor=yellow)](https://huggingface.co/datasets/xxxllz/ReproduceBench) 
+
 This is the official repo of AutoReprouduce and ReproduceBench.
 
 ## Overview
