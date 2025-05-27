@@ -5,7 +5,7 @@
 This is the official repo of AutoReprouduce and ReproduceBench.
 
 ## Overview
-![main](autorp.pdf)
+![main](autorp.png)
 
 ## AutoReproduce
 We are currently organizing the code.
