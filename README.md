@@ -3,7 +3,7 @@
 This is the official repo of AutoReprouduce and ReproduceBench.
 
 ## Overview
-![main](autorp.png)
+![main](autorp.pdf)
 
 ## AutoReproduce
 We are currently organizing the code.
