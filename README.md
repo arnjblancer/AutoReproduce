@@ -15,6 +15,7 @@ We are currently organizing the code.
 
 All the datasets and human-curated reference code could be available at [ReproduceBench](https://huggingface.co/datasets/ai9stars/ReproduceBench).
 ```
+pip install -U huggingface_hub
 cd AutoReproduce
 huggingface-cli download --repo-type dataset --resume-download ai9stars/ReproduceBench --local-dir ReproduceBench
 ```
