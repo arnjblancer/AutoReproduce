@@ -25,6 +25,7 @@ For any questions, you can contact [2429527z@gmail.com](mailto:2429527z@gmail.co
 
 ## Citation
 If you find this work useful, consider giving this repository a star ⭐️ and citing 📝 our paper as follows:
+```
 @misc{zhao2025autoreproduceautomaticaiexperiment,
       title={AutoReproduce: Automatic AI Experiment Reproduction with Paper Lineage}, 
       author={Xuanle Zhao and Zilin Sang and Yuxuan Li and Qi Shi and Shuo Wang and Duzhen Zhang and Xu Han and Zhiyuan Liu and Maosong Sun},
@@ -34,6 +35,7 @@ If you find this work useful, consider giving this repository a star ⭐️ and 
       primaryClass={cs.AI},
       url={https://arxiv.org/abs/2505.20662}, 
 }
+```
 
 ## Acknowledgement
 The code is based on the [Agent Laboratory](https://github.com/SamuelSchmidgall/AgentLaboratory). Thanks for these great works and open sourcing!
