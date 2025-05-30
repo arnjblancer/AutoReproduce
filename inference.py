@@ -14,26 +14,22 @@ def curr_cost_est():
     costmap_in = {
         "gpt-4o": 2.50 / 1000000,
         "gpt-4o-mini": 0.150 / 1000000,
-        "o1-preview": 15.00 / 1000000,
-        "o1-mini": 3.00 / 1000000,
+        "o1-mini": 1.1 / 1000000,
         "claude-3-5-sonnet": 3.00 / 1000000,
-        "claude-3-7-sonnet": 3.00 / 1000000,
-        "deepseek-chat": 1.00 / 1000000,
-        "deepseek-r1": 3.00 / 1000000,
+        "deepseek-chat": 0.3 / 1000000,
+        "deepseek-r1": 0.6 / 1000000,
         "o1": 15.00 / 1000000,
-        "o3-mini": 3.00 / 1000000,
+        "o3-mini": 0.25 / 1000000,
     }
     costmap_out = {
         "gpt-4o": 10.00/ 1000000,
         "gpt-4o-mini": 0.6 / 1000000,
-        "o1-preview": 60.00 / 1000000,
-        "o1-mini": 12.00 / 1000000,
+        "o1-mini": 4.4 / 1000000,
         "claude-3-5-sonnet": 12.00 / 1000000,
-        "claude-3-7-sonnet": 12.00 / 1000000,
-        "deepseek-chat": 5.00 / 1000000,
-        "deepseek-r1": 15.00 / 1000000,
+        "deepseek-chat": 1.1 / 1000000,
+        "deepseek-r1": 2.2 / 1000000,
         "o1": 60.00 / 1000000,
-        "o3-mini": 12.00 / 1000000
+        "o3-mini": 1.25 / 1000000
     }
     return sum([costmap_in[_]*TOKENS_IN[_] for _ in TOKENS_IN]) + sum([costmap_out[_]*TOKENS_OUT[_] for _ in TOKENS_OUT])
 
