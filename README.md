@@ -1,4 +1,4 @@
-# AutoReproduce
+# AutoReproduce: Automatic AI Experiment Reproduction with Paper Lineage
 
 [![🤗 Benchmark (HuggingFace)](https://img.shields.io/badge/Dataset-HuggingFace-FFD21E.svg?logo=huggingface&logoColor=yellow)](https://huggingface.co/datasets/ai9stars/ReproduceBench) [![📑 Paper (arXiv:2505.20662)](https://img.shields.io/badge/arXiv-2505.20662-b31b1b.svg?logo=arXiv)](https://arxiv.org/abs/2505.20662)
 
@@ -10,15 +10,33 @@ This is the official repo of AutoReproduce and ReproduceBench.
 
 ## AutoReproduce
 We are currently organizing the code.
+### Quick Start
+```
+export OPENAI_API_KEY="<OPENAI_API_KEY>"
+export BASE_URL="<BASE_URL>" #If necessary
+
+bash scripts/reproduce.sh
+```
 
 ## ReproduceBench
-
+### Download Datasets
 All the datasets and human-curated reference code could be available at [ReproduceBench](https://huggingface.co/datasets/ai9stars/ReproduceBench).
 ```
 pip install -U huggingface_hub
 cd AutoReproduce
 huggingface-cli download --repo-type dataset --resume-download ai9stars/ReproduceBench --local-dir ReproduceBench
 ```
+### Evaluation
+All the evaluation code are under ```evaluation```. The current code is not well-structured. We are currently working on organizing it.
+```
+# First summarize the key points of the paper.
+python evaluation/summarize_points.py
+# Then run the following files to calculate align-score.
+python evaluation/eval_high.py
+python evaluation/eval_low.py
+python evaluation/eval_mixed.py
+```
+
 ## Contact
 
 For any questions, you can contact [2429527z@gmail.com](mailto:2429527z@gmail.com).
