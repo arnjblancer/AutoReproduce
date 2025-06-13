@@ -1,0 +1,595 @@
+# Solving High-Dimensional PDEs with Latent Spectral Models  
+
+Haixu Wu' Tengge Hu' Huakun Luo' Jianmin Wang' Mingsheng Long'  
+
+# Abstract  
+
+Deep models have achieved impressive progress in solving partial differential equations (PDEs). A burgeoning paradigm is learning neural operators to approximate the input-output mappings of PDEs. While previous deep models have explored the multiscale architectures and various operator designs, they are limited to learning the operators as a whole in the coordinate space. In real physical science problems, PDEs are complex coupled equations with numerical solvers relying on discretization into high-dimensional coordinate space, which cannot be precisely approximated by a single operator nor efficiently learned due to the curse of dimensionality. We present Latent Spectral Models (LSM) toward an efficient and precise solver for high-dimensional PDEs. Going beyond the coordinate space, LSM enables an attention-based hierarchical projection network to reduce the high-dimensional data into a compact latent space in linear time. Inspired by classical spectral methods in numerical analysis, we design a neural spectral block to solve PDEs in the latent space that approximates complex input-output mappings via learning multiple basis operators, enjoying nice theoretical guarantees for convergence and approximation. Experimentally, LSM achieves consistent state-of-the-art and yields a relative gain of $11.5\%$ averaged on seven benchmarks covering both solid and fluid physics. Code is available at https://github.com/thuml/LatentSpectral-Models.  
+
+## 1. Introduction  
+
+Extensive real-world phenomena are governed by underlying partial differential equations (PDEs), such as turbulence, atmospheric circulation and stress of deformed materials (Wazwaz, 2002; Roubicek, 2013). Thus, solving PDEs is the shared foundation problem among many scientific and engineering areas and can further benefit essential real-world applications, like airflow modeling for airfoil design, atmospheric simulation for weather forecasting and stress test in civil engineering. Recently, deep models have achieved great progress in various tasks (He et al., 2016; Devlin et al., 2019; Liu et al., 2021). In view of the great nonlinear modeling capability of deep models, they have been widely used to solve PDEs by approximating the mapping between inputoutput pairs in PDE-governed tasks (Hao et al., 2022; Raissi et al., 2019; Lu et al., 2021; Li et al., 2021; Cao, 2021).  
+
+Concretely, in real-world applications, PDEs are usually discretized into high-dimensional coordinate spaces, such as point cloud, mesh and grid. For example, as shown in Figure 1(c), the fluid simulation task governed by spatiotemporal continuous Navier-Stokes equations (Temam, 2001) can be discretized into successive grid frames, where the dimension of coordinate space is equal to the number of pixels in all frames. However, this high-dimensionality will bring thorny challenges to the solving process. Firstly, according to the phenomenon of curse of dimensionality (Trunk, 1979; Han et al., 2017), the solving process will cause huge computation cost in the high-dimensional space. Secondly, due to intricate interactions among multiple physical variates of coupled equations in high-dimensional coordinate space, the input-output mappings will be too complex to be approximated by a rough deep model (Trunk, 1979; Karniadakis et al., 2021). Thus, how to efficiently and precisely approximate complex mappings between high-dimensional input-output pairs is the key problem to solving PDEs.  
+
+In previous works, the well-acknowledged paradigm is to learn neural operators to approximate the complex inputoutput mappings (Li et al., 2020; Lu et al., 2021). Extensive designs of operators have been proposed, such as approximating the integral operator in Fourier space (Li et al., 2021; Tran et al., 2023), capturing the global information by Transformers (Vaswani et al., 2017; Cao, 2021; Liu et al., 2022) and etc. Note that all these designs attempt to learn the operator as a whole to approximate input-output mappings. However, in high-dimensional space, the input-output mappings can be too complex to be covered by a single operator, which may suffer from optimization problems and limited performance. Besides, some works introduce the multiscale architecture into deep models (Wen et al., 2021; Rahman et al., 2022). Although they can downsample the input into various scales, they are still limited to learning operators in the coordinate space, thereby still undergoing high-dimensionality challenges to some extent.  
+
+![](images/2c978c21e94c97a7707e956a7cee19937f721bfcaa541ae531b60747c92d4f80.jpg)  
+Figure 1. Example of PDE-governed tasks, including solid (lft) and fluid (right) physics, whose solving processes are approximating complex input-output mappings in discretized high-dimensional coordinate spaces. Allthe tasks are covered in our experiments.  
+
+To tackle the above challenges, we start from the inherent property of PDE-governed tasks. It is observed that all their inputs and outputs follow certain PDE constraints, indicating that these high-dimensional data can be projected to a more compact latent space. Based on this insight, we propose the Latent Spectral Models (LSM) with a hierarchical projection network. Different from solely downsampling data like previous methods, by leveraging the attention mechanism with latent tokens as physical prompts, our projection network can reduce the high-dimensional data into compact latent space in linear time, which will also highlight the physics properties and remove the redundant coordinate information. Benefiting from this projection, LSM can get rid of the unwieldy coordinate space and solve PDEs in the latent space. Besides, to tackle the complex mappings, inspired by the classical spectral methods in numerical analysis (Gottlieb & Orszag, 1977), we present the neural spectral block to decompose complex nonlinear mappings into multiple basis operators, which also holds the universal approximation capacity with theoretical guarantees. Experimentally, LSM achieves consistent state-of-the-art on seven well-established benchmarks and also presents good transferability between PDEs of different conditions. Our contributions are summarized as follows:  
+
+: Instead of solving PDEs in the coordinate space, we present the LSM with a hierarchical projection network, which can reduce high-dimensional data into compact latent space with linear complexity.  
+
+: Inspired by spectral methods, we propose the neural spectral block to tackle complex mappings by learning multiple basis operators, which holds the universal approximation capacity under theoretical guarantees.  
+
+: LSM achieves an $11.5\%$ relative error reduction with respect to the previous state-of-the-art models averaged from seven PDE-solving benchmarks, covering representative PDEs in both solid and fluid physics, and also presents favorable efficiency and transferability.  
+
+## 2. Preliminaries  
+
+### 2.1. Spectral Methods  
+
+Spectral methods are widely acknowledged in applied mathematics and scientific computing in solving PDEs numerically (Gottlieb & Orszag, 1977; Fornberg, 1998; Kopriva, 2009). The key idea is to approximate the solution $f$ of a certain PDE as a finite sum of $N$ orthogonal basis functions $\{f_{1},f_{2},\cdots,f_{N}\}$ . Concretely, the approximation solution $f^{N}$ can be formulized as follows:  
+
+$$
+f\approx f^{N}=\sum_{i=1}^{N}w_{i}f_{i},
+$$  
+
+where $N$ is the hyperparameter and $w_{i}$ is the coefficient for $f_{i},{i\in\{1,\cdots,N\}}$ . With the above approximation, the solving process can be simplified as optimizing coefficients $\{w_{1},w_{2},\cdot\cdot\cdot,w_{N}\}$ to make $f^{N}$ satisfy the PDE better. The spectral methods hold nice approximation and convergence properties in solving PDEs (Gottlieb & Orszag, 1977).  
+
+### 2.2. Deep Models for PDEs  
+
+Due to the immense importance in extensive scientific and engineering areas, solving PDEs has attached great interest. Since it is usually impossible to work out explicit formulas for PDE solutions, many numerical methods have been explored (Solin, 2005; Grossmann et al., 2007). However, these classical methods need to recalculate for different instances, such as different initial velocity fields in fluid simulation or different meshes in solid stress estimation. Besides, these classical methods also suffer from poor computation efficiency, especially in processing the high-dimensional data. Recently, various deep models have been developed. The mainstream works can be roughly categorized into equation-constraint and operator-learning methods.  
+
+Equation-constraint methods. This category of works directly parameterizes the PDE solution as a deep model and formalizes equation constraints, e.g. the PDEs and their corresponding initial and boundary conditions, as the objective function (Weinan & Yu, 2017; Raissi et al., 2019; Wang et al., 2020a;b). By doing this, they can directly obtain the solution for a certain PDE through model optimization. However, these methods require the exact formalization of underlying PDEs, which is hard to acquire in real-world applications. Thus, instead of the equation-constraint methods, this paper focuses on the operator-learning paradigm, which does not need explicit PDE formalizations.  
+
+Operator-learning methods. This paradigm attempts to present deep models with novel architectures to approximate the mapping between input-output pairs, such as from past observations of fluid velocity to future prediction or from the structure of elastic material to inner stress. Technically, by rewriting inputs and outputs as functions w.r.t. coordinates, the solving process can be formulized as learning operators between input-output Banach spaces.  
+
+Some previous works have presented various designs for operators. Lu et al. present the DeepONet as a branch-trunk architecture derived from the universal approximation theorem (Chen & Chen, 1995). FNO (Li et al., 2021) adopts the linear transformation in the Fourier domain to approximate the integral operator. Further, geo-FNO (Li et al., 2022) is proposed to handle tasks with complex geometrics (e.g. point cloud) by transforming the data into and back from a latent uniform mesh. F-FNO (Tran et al., 2023) improves FNO with the separable Fourier transform and residual connection. KNO (Xiong et al., 2023a) enhances the temporal dynamic modeling of FNO based on the Koopman theory (Brunton et al., 2021). Besides, MWT (Gupta et al., 2021) introduces the multiwavelet-based operator, which can capture complex dependencies at various scales. SNO (Fanaskov & Oseledets, 2022) reformulates the input and output functions as coefficients of basis functions and adopts the neural network to learn the mapping between coefficients. Recently, Cao explored the self-attention mechanism (Vaswani et al., 2017) and presented a Galerkin-type attention with linear complexity for solving PDEs. Unlike previous methods, instead of approximating mappings with a single operator, LSM decomposes the complex nonlinear operator into several basis operators by the neural spectral block, thereby benefiting complex PDEs solving.  
+
+Other works attempt to enhance deep models with the multiscale architecture. U-FNO (Wen et al., 2021) and U-NO (Rahman et al., 2022) integrate U-Net (Ronneberger et al., 2015) and FNO to empower the model with multiscale processing capability. HT-Net (Liu et al., 2022) incorporates the advanced Transformers (Vaswani et al., 2017; Liu et al., 2021) into a hierarchical framework to capture highfrequency components in PDEs. In contrast to previous methods, LSM presents an attention-based hierarchical projection network to project high-dimensional data into compact latent space, which is free from the redundant coordinate space and focuses on the essential physical information.  
+
+## 3. Latent Spectral Models  
+
+As aforementioned, we highlight the difficulties of solving high-dimensional PDEs as huge computation costs and complex input-output mappings. To tackle these challenges, we present LSM with a hierarchical projection network to project the high-dimensional data into compact latent space with favorable efficiency. Further, inspired by spectral methods, we design the neural spectral block to approximate complex mappings with multiple basis operators, which holds nice approximation and convergence properties.  
+
+Problem setup. For a PDE-governed task, given the coordinates in a bounded open set $\mathcal{D}\subset\mathbb{R}^{d}$ , both inputs and outputs can be rewritten as functions w.r.t. coordinates, which are in the Banach spaces $\begin{array}{r}{\mathcal{X}\ =\ \mathcal{X}(\mathcal{D};\mathbb{R}^{d_{\pmb{x}}})}\end{array}$ and $\mathcal{Y}=\mathcal{Y}(\mathcal{D};\mathbb{R}^{d_{\boldsymbol{y}}})$ respectively (Lu et al., 2021; Li et al., 2021). $\mathbb{R}^{d_{x}}$ and $\mathbb{R}^{d_{\boldsymbol{y}}}$ are the range of input and output functions. For example, as Figure 2 shows, both inputs and outputs are in the regular grid. Thus, $\mathcal{D}$ is a finite set of grid points within the rectangle area in $\mathbb{R}^{2}$ . For each coordinate $\mathbf{s}\in{\mathcal{D}}$ $\pmb{x}(\mathbf{s})\in\mathbb{R}^{d_{\pmb{x}}}$ and $\pmb{y}(\mathbf{s})\in\mathbb{R}^{d_{\pmb{y}}}$ represent the input and output function values at position s, corresponding to pixel values in the case of Figure 2. With the above formalization, the solving process is to approximate the optimal operator $\mathcal{F}:\mathcal{X}\rightarrow\mathcal{Y}$ with deep model $\mathcal{F}_{\theta}$ , which is learned from observed samples $\{({\pmb x},{\pmb y})\}$ and $\theta\in\Theta$ is the parameter set.  
+
+Overall framework. Instead of directly solving PDEs in high-dimensional coordinate space like previous methods, by introducing latent space, LSM can get rid of redundant coordinate information. As shown in Figure 2, LSM breaks the PDE solving process into three modules as follows:  
+
+$$
+\mathcal{F}_{\theta}=\mathcal{F}_{\theta_{\mathrm{LatentToCoord}}}\circ\mathcal{F}_{\theta_{\mathrm{Solve}}}\circ\mathcal{F}_{\theta_{\mathrm{CoordToLatent}}},
+$$  
+
+where $\scriptscriptstyle\mathrm{~o~}$ denotes the operator composition. In LSM, the hierarchical projection network provides an attention-based instantiation for $\mathcal{F}_{\theta_{\mathrm{CoordToLatent}}}:\mathcal{X}\to\mathcal{T}_{\mathcal{X}}$ and $\mathcal{F}_{\theta_{\mathrm{LatentToCoord}}}:$ $\mathcal{T}_{\mathcal{V}}\rightarrow\mathcal{V}$ where $\mathcal{T}_{\mathcal{X}}(\mathcal{D};\mathbb{R}^{d_{\mathrm{latent}}})$ and $\mathcal{T}_{\mathcal{V}}(\mathcal{D};\mathbb{R}^{d_{\mathrm{latent}}})$ are the latent input-output Banach spaces respectively. And the neural spectral block instantiates $\mathcal{F}_{\theta_{\mathrm{Solve}}}:\mathcal{T}_{\mathcal{X}}\rightarrow\mathcal{T}_{\mathcal{Y}}$ to approximate complex nonlinear mappings in the latent space.  
+
+### 3.1. Hierarchical Projection Network  
+
+To make the solving process free from unwieldy coordinate space, we present the hierarchical projection network by embedding attention-based projectors in a patchified multiscale architecture, which can reduce high-dimensional data into compact latent space for efficient PDE solving.  
+
+![](images/f0d129ff8a0c432825ab1baf367c414749edcc554856e9ce9df39fa3f804da08.jpg)  
+Figure 2. erw of L. he solving poess s applied to ch patch of ch cale with he sucessive module: proecting coordnate space into latent space (CoordToLatent), solving PDEs in latent space and projecting back to coordinate space (LatentToCoord)  
+
+Attention-based projectors.  If we directly apply selfattention (Vaswani et al., 2017) among observations at multiple coordinates, the results will still be in high-dimensional coordinate space. Thus, to extract essential physical information of PDEs from redundant high-dimensional data, we propose attention-based projectors with latent tokens. The latent tokens are shared among all input-output pairs, initialized as learnable model parameters, and optimized to cover the common properties of data, namely PDE constraints, thereby providing physical prompts for projection.  
+
+Concretely, given the coordinates set $\mathcal{D}$ and the deep representations of inputs $\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}},\pmb{x}(\mathbf{s})\in\mathbb{R}^{1\times d_{\mathrm{model}}}$ , we will randomly initialize $C$ latent tokens $\{\mathbf{T}_{i}\}_{i=1}^{C},\mathbf{T}_{i}\in\mathbb{R}^{1\times d_{\mathrm{latent}}}$ to provide physical prompts. As shown in Figure 2, we adopt the latent tokens as queries and deep representations as keys and values in the attention mechanism. The residual connection is also used to ease model optimization (He et al., 2016). This process can be formulized as:  
+
+$$
+\mathbf{T}_{\boldsymbol{x},i}=\mathbf{T}_{i}+\sum_{\mathbf{s}\in\mathcal{D}}\frac{\operatorname{Sim}\left(\mathbf{T}_{i},\boldsymbol{x}(\mathbf{s})\mathbf{W}_{\mathrm{K}}\right)}{\sum_{\mathbf{s^{\prime}}\in\mathcal{D}}\operatorname{Sim}\left(\mathbf{T}_{i},\boldsymbol{x}(\mathbf{s^{\prime}})\mathbf{W}_{\mathrm{K}}\right)}\left(\boldsymbol{x}(\mathbf{s})\mathbf{W}_{\mathrm{V}}\right),
+$$  
+
+where $i\in\{1,\cdots,C\}$ and $\mathbf{W}_{\mathrm{K}},\mathbf{W}_{\mathrm{V}}\in\mathbb{R}^{d_{\mathrm{model}}\times d_{\mathrm{latent}}}$ are linear layers for keys and values. $\mathrm{Sim}\left({\bf T}_{i},{\pmb x}({\bf s}){\bf W}_{\mathrm{K}}\right)=$ $\exp\left(\mathbf{T}_{i}\left(\pmb{x}(\mathbf{s})\mathbf{W}_{\mathrm{K}}\right)^{\mathsf{T}}\right)$ is for the similarity calculation. Under the physical prompts of learned latent tokens $\{\mathbf{T}_{i}\}_{i=1}^{C}$ the deep representations $\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}$ in the high-dimensional coordinate space are projected to $C$ tokens $\{\mathbf{T}_{\pmb{x},i}\}_{i=1}^{C}$ in latent space, where the latter is free from redundant coordinate information. To simplify notations, we summarize Eq. (3) as $\{\mathbf{T}_{\pmb{x},i}\}_{i=1}^{C}=\operatorname{CoordToLatent}(\{\mathbf{T}_{i}\}_{i=1}^{C},\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathscr{D}}).$  
+
+After solving PDEs in latent space by the neural spectral block, the latent input tokens $\{\mathbf{T}_{\pmb{x},i}\}_{i=1}^{C}$ are mapped to the latent output tokens $\{\mathbf{T}_{\pmb{y},i}\}_{i=1}^{C}$ . We summarize the solving process in latent space as $\{\mathbf{\bar{T}}_{\pmb{y},i}\}_{i=1}^{C}=\operatorname{Solve}(\{\mathbf{T}_{\pmb{x},i}\}_{i=1}^{C})$  
+
+Finally, we need to project latent output tokens back to highdimensional coordinate space as the final output. Similar to Eq. (3), by taking input representations as queries to provide coordinate information and latent output tokens as keys and values, this process can be formulized as follows:  
+
+$$
+\widehat{\pmb{y}}(\mathbf{s})=\pmb{x}(\mathbf{s})+\sum_{i=1}^{C}\frac{\mathrm{Sim}\left(\pmb{x}(\mathbf{s}),\mathbf{T}_{\pmb{y},i}\mathbf{W}_{\mathrm{K}}^{\prime}\right)}{\sum_{i^{\prime}=1}^{C}\mathrm{Sim}\left(\pmb{x}(\mathbf{s}),\mathbf{T}_{\pmb{y},i^{\prime}}\mathbf{W}_{\mathrm{K}}^{\prime}\right)}(\mathbf{T}_{\pmb{y},i}\mathbf{W}_{\mathrm{V}}^{\prime}),
+$$  
+
+where $\mathbf{s}\in{\mathcal{D}}$ and $\mathbf{W}_{\mathrm{K}}^{\prime},\mathbf{W}_{\mathrm{V}}^{\prime}\in\mathbb{R}^{d_{\mathrm{latent}}\times d_{\mathrm{model}}}$ are linear layers for keys and values. Eq. (4) is summarized as $\{{\widehat{\pmb{y}}}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}=$ Latent ToCoord $(\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}},\{\mathbf{T}_{\pmb{y},i}\}_{i=1}^{C})$ .The computation complexity of projectors in Eq. (3) and (4) is linear w.r.t. the size of coordinate set $\mathcal{D}$ , namely $\mathcal{O}(|\mathcal{D}|)$  
+
+Patchified multiscale architecture. It is notable that PDEs always present different physical states according to the observed scales and regions (Karniadakis et al., 2021). For example, in turbulent flow, unsteady vortices appear of many sizes, which interact with each other, leading to a very complex phenomenon (Morrison, 2013). To fit the intrinsic multiscale property and complex interactions of PDEs, we present a patchified multiscale architecture and attempt to solve PDEs in different regions and scales.  
+
+Technically, for the raw inputs in $\mathbb{R}^{d_{x}}$ , we firstly map them into deep representations $\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}},\pmb{x}(\mathbf{s})\in\mathbb{R}^{1\times d_{\mathrm{model}}}$ by the linear layer with parameters in $\mathbb{R}^{d_{\mathbf{x}}\times d_{\mathrm{model}}}$ . As shown in Figure 2, we employ the parameterized downsample layer to obtain deep representations. $\{\{\pmb{x}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}\}_{k=1}^{K}$ .9 $K$ scales by aggregating the local observations with learnable parameters, where $\pmb{x}^{k}(\mathbf{s})\in\mathbb{R}^{1\times d_{\mathrm{model}}^{k}}$ and $\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}~=$ $\{\pmb{x}^{1}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{1}}$ is in the finest resolution. For the $k$ -th scale, we further adopt the patchify operation (Dosovitskiy et al., 2021) to split the coordinate set $\mathcal{D}^{k}$ into $P_{k}$ nonoverlapping patches $\{\bar{\mathcal{D}}_{j}^{k}\}_{j=1}^{P_{k}}$ for different regions, where $\mathcal{D}_{j}^{k}\subset\mathcal{D}^{k}$ denotes coordinate set of the $j$ -th patch. More details about downsample and patchify operations are in Appendix I.  
+
+By randomly initializing $\left\{\{\mathbf{T}_{i}^{k}\}_{i=1}^{C}\right\}_{k=1}^{K}$ $\mathbf{T}_{i}^{k}\in\mathbb{R}^{1\times d_{\mathrm{latent}}^{k}}$ as latent tokens in $K$ scales, the solving process for the $j$ th patch in the $k$ -th scale can be formulized as follows:  
+
+![](images/eb0d6fb82e3601847425812fa0860576b84a06203e551bbca138566b2e95268f.jpg)  
+Figure 3. Comparison in approximating complex input-output mapping. For clarit, we only keep key components for approximation.  
+
+$$
+\begin{array}{r l}&{\{\mathbf{T}_{\boldsymbol{x},i,j}^{k}\}_{i=1}^{C}=\operatorname{CoordToLatent}\left(\{\mathbf{T}_{i}^{k}\}_{i=1}^{C},\{\boldsymbol{x}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}_{j}^{k}}\right)\quad\mathrm{th}}\\ &{\{\mathbf{T}_{\boldsymbol{y},i,j}^{k}\}_{i=1}^{C}=\operatorname{Solve}\left(\{\mathbf{T}_{\boldsymbol{x},i,j}^{k}\}_{i=1}^{C}\right)}\\ &{\{\boldsymbol{{\widehat{y}}}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}_{j}^{k}}=\operatorname{LatentToCoord}\left(\{\boldsymbol{x}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}_{j}^{k}},\{\mathbf{T}_{\boldsymbol{y},i,j}^{k}\}_{i=1}^{C}\right).}\end{array}
+$$  
+
+More details of $\mathrm{Solve}(\cdot)$ are deferred into the next section. Note that the patches in the same scale are governed by the same underlying PDEs, while in different scales, the coefficients of PDEs will change. Thus, the model parameters, e.g. latent tokens and linear layers, are shared in patches of the same scale but independent in different scales.  
+
+After the de-patchify operation, we splice patches into the output for the $k$ -th scale as $\{\widehat{\pmb{y}}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}$ . Then, we successively upsample the outputs in different scales from coarse to fine. Concretely, for the $k$ th scale, $\{\widehat{\pmb{y}}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}$ is concatenated with the interpolation-upsampled $\{\widehat{\pmb{y}}^{k+1}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k+1}}$ and further projected to $\mathbb{R}^{d_{\mathrm{model}}^{k}}$ with a linear layer parameterized in $\mathbb{R}^{\bar{(}d_{\mathrm{model}}^{k+1}+d_{\mathrm{model}}^{k})\times d_{\mathrm{model}}^{k}}$ . Finally, we obtain the finest output $\{{\widehat{\pmb{y}}}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}$ with $\widehat{\pmb{y}}(\mathbf{s})\in\mathbb{R}^{d_{\mathrm{model}}}$ . After the linear layer with parameters in $\mathbb{R}^{d_{\mathrm{model}}\times d_{\boldsymbol{y}}}$ , we can obtain the final output.  
+
+### 3.2. Neural Spectral Block  
+
+Benefitting from the hierarchical projection network, we can solve PDEs by approximating the complex mapping between latent input-output tokens as described in Eq. (5).  
+
+As shown in Figure 3, instead of learning a single operator, inspired by classical spectral methods in numerical analysis (Section 2.1), we present the neural spectral block by decomposing complex mappings into multiple basis operators:  
+
+$$
+\mathcal{F}_{\theta_{\mathrm{Solve}}}=\sum_{i=1}^{N}w_{i}\mathcal{F}_{\theta_{\mathrm{Solve},i}},
+$$  
+
+where $N$ is the hyperparameter and $\{\mathcal{F}_{\theta_{\mathrm{Solve}},i}\}_{i=1}^{N}$ are orhogonal bs r w ble par $\bar{\{{w}_{i}\}}_{i=1}^{N}$  
+
+Following the classical design in spectral methods (Jackson, 1934; Tolstov, 2012), we select the trigonometric basis operators. Thus, for $\pmb{t}_{\pmb{x}}:\mathcal{D}\rightarrow\mathbb{R}^{d_{\mathrm{latent}}}\in\mathcal{T}_{\mathcal{X}},\forall\mathbf{s}\in\mathcal{D}$ , we define e multiple basis operators as follows:  
+
+$$
+\begin{array}{r l}&{\mathcal{F}_{\theta_{\mathrm{Solve}},(2k-1)}\big(\mathbf{\boldsymbol{t}}_{\boldsymbol{x}}(\mathbf{\boldsymbol{s}})\big)=\sin\big(k\mathbf{\boldsymbol{t}}_{\boldsymbol{x}}(\mathbf{\boldsymbol{s}})\big)}\\ &{\qquad\mathcal{F}_{\theta_{\mathrm{Solve}},(2k)}\big(\mathbf{\boldsymbol{t}}_{\boldsymbol{x}}(\mathbf{\boldsymbol{s}})\big)=\cos\big(k\mathbf{\boldsymbol{t}}_{\boldsymbol{x}}(\mathbf{\boldsymbol{s}})\big),}\end{array}
+$$  
+
+where k E {1, --. , } and N is even. Technically, given the latent input token $\mathbf{T}_{x}\in\mathbb{R}^{d_{\mathrm{latent}}}$ , the latent output token $\mathbf{T}_{\boldsymbol{y}}$ of the neural spectral block is calculated as follows:  
+
+$$
+\begin{array}{r}{\mathbf{T}_{\boldsymbol{y}}=\mathbf{T}_{\boldsymbol{x}}+\mathbf{w}_{0}+\mathbf{w}_{\mathrm{sin}}\left[\begin{array}{c}{\sin(\mathbf{T}_{\boldsymbol{x}})}\\ {\vdots}\\ {\sin(\frac{N}{2}\mathbf{T}_{\boldsymbol{x}})}\end{array}\right]+\mathbf{w}_{\mathrm{cos}}\left[\begin{array}{c}{\cos(\mathbf{T}_{\boldsymbol{x}})}\\ {\vdots}\\ {\cos(\frac{N}{2}\mathbf{T}_{\boldsymbol{x}})}\end{array}\right],}\end{array}
+$$  
+
+where $\mathbf{w}_{0}\in\mathbb{R}^{d_{\mathrm{latent}}}$ ${\bf w}_{\mathrm{sin}}\in\mathbb{R}^{1\times\frac{N}{2}}$ $\mathbf{w}_{\mathrm{cos}}\in\mathbb{R}^{1\times\frac{N}{2}}$ are learnable parameters. Residual connection is also adopted to facilitate optimization (He et al., 2016). We summarize the process of the neural spectral block as $\begin{array}{r}{\mathbf T_{\boldsymbol{y}}=\operatorname{Solve}(\mathbf T_{\boldsymbol{x}}).}\end{array}$ which is applied to the latent input tokens of every patch at every scale. Also according to the analysis in Eq. (5), like latent tokens, $\mathbf{w}_{0},\mathbf{w}_{\mathrm{sin}},\mathbf{w}_{\mathrm{cos}}$ is shared in patches of the same scale but independent in different scales.  
+
+Since PDE constraints have already been involved in inputoutput pairs, during the model training, $\mathbf{w}_{0},\mathbf{w}_{\mathrm{sin}},\mathbf{w}_{\mathrm{cos}}$ will be optimized to satisfy the PDEs better, namely solving PDEs in latent space. Besides, the neural spectral block also holds the universal approximation capacity with favorable convergence property guaranteed by the following theorems.  
+
+Assumption 3.1 (Finite Coordinate Set). In real-world applications, the analysis or numerical simulation of the PDEgoverned task is mainly in the regular grid, mesh or point cloud, where the input is only observed on finite coordinates. Thus, to simplify the following theoretical derivations, we assume that $\mathcal{D}=\{\mathbf{s}_{1},\cdot\cdot\cdot,\mathbf{s}_{M}\}$ is a finite set with size $M$ e.g. for a frame with height $H$ and weight $W$ A $M$ is $H\times W$ . Remark 3.2 (Simplification w.r.t. Finite Coordinate Set). By assuming that $\mathcal{D}$ is a finite set with $M$ coordinates, the learning process of operator $\mathcal{F}:\mathcal{X}(\mathcal{D};\mathbb{R}^{d_{\pmb{x}}})\rightarrow\mathcal{Y}(\mathcal{D};\mathbb{R}^{d_{\pmb{y}}})$ is simplified to solve the function $\pmb{f}:\mathbb{R}^{M\times d_{\pmb{x}}}\rightarrow\mathbb{R}^{M\times d_{\pmb{y}}}$ A where $\mathcal{F}(\pmb{x})=\pmb{f}\circ\pmb{x},\forall\pmb{x}\in\pmb{\chi}$ . Since the channel dimension can be seen as independent, we only focus on the coordinate dimension $M$ in the following derivations.  
+
+Theorem 3.3 (Convergence of Trigonometric Approximation in High-dimensional Space). (Dyachenko, 1995) Let $\pmb{f}:\mathbb{R}^{M}\rightarrow\mathbb{R}^{M}$ be a $2\pi$ -periodic function w.r.t. the variable on each dimension, where $\begin{array}{r}{\pmb{f}\in L_{p}\left([-\pi,\pi)^{M}\right),M\geq2,}\end{array}$ $1\le p\le\infty$ and $p\neq2$ . For $f$ defined on the $M$ -dimension space, its trigonometric approximation $\pmb{f}^{N}$ is defined as  
+
+$$
+f^{N}(\mathbf{x})=\sum_{\mathbf{k}\in\mathbb{Z}^{M},|\mathbf{k}|\leq N}\left({\frac{1}{2\pi}}\int_{[-\pi,\pi)^{M}}f(\mathbf{t})e^{-i\mathbf{k}\mathbf{t}}{\mathrm{d}}\mathbf{t}\right)e^{i\mathbf{k}\mathbf{x}},
+$$  
+
+If $f$ satisfies the Lipschitz condition, namely there is a nonnegative constant $K_{1}$ such that  
+
+$$
+\|\pmb{f}(\mathbf{x})-\pmb{f}(\mathbf{y})\|_{p}\leq K_{1}\|\mathbf{x}-\mathbf{y}\|_{p},\forall\mathbf{x},\mathbf{y}\in\mathbb{R}^{M},
+$$  
+
+and $\begin{array}{r}{i f(M-1)|\frac{1}{2}-\frac{1}{p}|<1}\end{array}$ then there exists a constant $K_{2}$ such that  
+
+$$
+\left\|\pmb{f}-\pmb{f}^{N}\right\|_{p}\leq K_{2}N^{(M-1)|\frac{1}{2}-\frac{1}{p}|-1}.
+$$  
+
+Remark 3.4 (Slow Convergence Rate in High-dimensional Space). As demonstrated in Theorem 3.3, the convergence rate of trigonometric approximation is directly related to the dimension $M$ , indicating that the spectral methods suffer from the slow convergence rate for high-dimensional space, e.g. $M=H\times W$ for a frame with height $H$ and width $W$ Actually, the convergence properties of spectral methods in high-dimensional spaces are still under explored as an open problem (Brandolini et al., 2020). These results also support our design in solving PDEs in latent space instead of high-dimensional coordinate space.  
+
+Remark 3.5 (Solving Process in Latent Space). After projecting the $M$ -dimension data into independent latent tokens and further restricting each latent token within $[0,\pi]$ through proper normalization, the solving process in the latent space is to approximate $f:[0,\pi]\to\mathbb{R}$  
+
+Theorem 3.6 (Approximation and Convergence Properties of Neural Spectral Block). Given $f:[0,\pi]\to\mathbb{R},$ if $f$ satisfies the Lipschitz condition, there is a choice of model parameters such that the approximation $f^{N}$ defined in neural spectral block (trigonometric approximation with residual) can uniformly converge to $f$ with the speed as  
+
+$$
+|f(x)-f^{N}(x)|\leq\frac{K_{3}\ln N}{N},\forall x\in[0,\pi],
+$$  
+
+where $K_{3}$ is a constant that does not depend on $f$ nor $N$  
+
+Proof. See Appendix A.  
+
+## 4. Experiments  
+
+We extensively evaluate the proposed LSM on seven benchmarks, covering the typical PDEs in both solid and fluid physics and samples in various geometrics.  
+
+Table 1. Summary of experiment benchmarks.   
+
+
+<html><body><table><tr><td>PHySICS</td><td>BENCHMARKS</td><td>GEOMETRY</td><td>|#DIM</td></tr><tr><td>SOLID</td><td>ELASTICITY-P ELASTICITY-G PLASTICITY</td><td>POInT CLOUD REGULAR GRID STRUCTURED MESH</td><td>2D 2D 3D</td></tr><tr><td>FLUID</td><td>NAVIER-STOKES DARCY AIrFOil PIPE</td><td>REGULAR GRID REGULAR GRID STRUCTURED MESH STRUCTURED MESH</td><td>3D 2D 2D 2D</td></tr></table></body></html>  
+
+Benchmarks. As shown in Table 1, the experimental samples of seven benchmarks are recorded in various geometrics, including the regular grid, point cloud and structured mesh in the 2D or 3D space. These benchmarks are generated by different PDEs for different tasks. For clearness, we summarize the tasks of all benchmarks in Figure 1. Specifically, Elasticity-G is interpolated from Elasticity-P. More details can be found in Appendix B, including the governing PDEs, size of benchmarks and input-output resolutions.  
+
+Baselines.We compare the LSM with fourteen wellacknowledged and advanced models in all seven benchmarks, including three baselines proposed for vision tasks: U-Net (2015), ResNet (2016), Swin Transformer (2021), and ten baselines presented for PDEs: DeepONet (2021), TF-Net (2019), FNO (2021), U-FNO (2021), WMT (2021), Galerkin Transformer (2021), SNO (2022), U-NO (2022), HT-Net (2022), F-FNO (2023), KNO (2023a). U-NO and HT-Net are previous state-of-the-art models in solving PDEs. Note that all the above baselines are proposed for regular grid or structured mesh. Thus, for the Elasticity-P benchmark in point cloud, we adopt the special transformation proposed by geo-FNO (2022) at the beginning and end of these models, which can transform irregular input domain into or back from a uniform mesh.  
+
+Implementation.  For fairness, all the methods are trained with L2 loss and 500 epochs, using the ADAM (Kingma & Ba, 2015) optimizer with an initial learning rate of $10^{-3}$ The batch size is set to 20. We adopt the sum of mean squared error (MSE) on each coordinate as the metric. A comprehensive description is provided in Appendix I.  
+
+### 4.1. Main Results  
+
+Results. As shown in Table 2, LSM achieves consistent state-of-the-art performance on all seven benchmarks, covering both solid and fluid physics, justifying the generality of LSM on different PDEs, geometrics and dimensions. Overall, LSM averagely outperforms the previous best method on each benchmark by $11.5\%$ . Specifically, our method accomplishes remarkable promotions on tasks with semantically heterogeneous input and output, such as $13.0\%$ on ElasticityG ( $0.0469{\scriptstyle\rightarrow}0.0408,$ , $15.6\%$ on Darcy $\cdot0.0077{\scriptstyle\rightarrow}0.0065$ - Note that these two tasks require the model to capture complex mappings between input and output, e.g. mapping from structure to inner stress on Elasticity-G or from the porous medium to flow on Darcy. From Table 2, we can find that the well-acknowledged FNO performs mediocrely on these complex tasks, verifying the advantages of LSM in approximating complex mappings of PDEs.  
+
+Table 2. Performance comparison with fourteen baselines on all benchmarks. MSE is recorded. A smaller MSE indicates better performance. For clarity, the best result i in bold and the second best is underlined. Promotion refers to the relative eror reduction w.r.t.the second best model on each benchmark. We only compare KNO (2023a; 2023b) and TF-Net (2019) on the Navier-Stokes benchmark, since they are proposed for auto-regresive tasks i fluid simulatio. In adtion to the quantitatie pefomance, we also rank the models on each benchmark. See Table 13 for the performance rankings.   
+
+
+<html><body><table><tr><td rowspan="2">MODEL</td><td colspan="3">SOLID Physics*</td><td colspan="4">FLUID Physics</td></tr><tr><td>ELASTICITY-P </td><td>ELASTICITY-G</td><td>PLASTICITY</td><td>NAVIER-STOKES</td><td>DARCY</td><td>AIRFOIL</td><td>PIPE</td></tr><tr><td>U-NET (2015)</td><td>0.0235</td><td>0.0531</td><td>0.0051</td><td>0.1982</td><td>0.0080</td><td>0.0079</td><td>0.0065</td></tr><tr><td>RESNET (2016)</td><td>0.0262</td><td>0.0843</td><td>0.0233</td><td>0.2753</td><td>0.0587</td><td>0.0391</td><td>0.0120</td></tr><tr><td>TF-NET (2019)</td><td></td><td>/</td><td>!</td><td>0.1801</td><td></td><td>/</td><td>/</td></tr><tr><td>SwIN (2021)</td><td>0.0283</td><td>0.0819</td><td>0.0170</td><td>0.2248</td><td>0.0397</td><td>0.0270</td><td>0.0109</td></tr><tr><td>DEEPONET (2021)</td><td>0.0965</td><td>0.0900</td><td>0.0135</td><td>0.2972</td><td>0.0588</td><td>0.0385</td><td>0.0097</td></tr><tr><td>FNO (2021)</td><td>0.0229</td><td>0.0508</td><td>0.0074</td><td>0.1556</td><td>0.0108</td><td>0.0138</td><td>0.0067</td></tr><tr><td>U-FNO (2021)</td><td>0.0239</td><td>0.0480</td><td>0.0039</td><td>0.2231</td><td>0.0183</td><td>0.0269</td><td>0.0056</td></tr><tr><td>WMT (2021)</td><td>0.0359</td><td>0.0520</td><td>0.0076</td><td>0.1541</td><td>0.0082</td><td>0.0075</td><td>0.0077</td></tr><tr><td>GALERKIN (2021)</td><td>0.0240</td><td>0.1681</td><td>0.0120</td><td>0.2684</td><td>0.0170</td><td>0.0118</td><td>0.0098</td></tr><tr><td>SNO (2022)</td><td>0.0390</td><td>0.0987</td><td>0.0070</td><td>0.2568</td><td>0.0495</td><td>0.0893</td><td>0.0294</td></tr><tr><td>U-NO (2022)</td><td>0.0258</td><td>0.0469</td><td>0.0034</td><td>0.1713</td><td>0.0113</td><td>0.0078</td><td>0.0100</td></tr><tr><td>HT-NET (2022)</td><td>0.0372</td><td>0.0472</td><td>0.0333</td><td>0.1847</td><td>0.0079</td><td>0.0065</td><td>0.0059</td></tr><tr><td>F-FNO (2023)</td><td>0.0263</td><td>0.0475</td><td>0.0047</td><td>0.2322</td><td>0.0077</td><td>0.0078</td><td>0.0070</td></tr><tr><td>KNO (2023A)</td><td></td><td>/</td><td>/</td><td>0.2023</td><td></td><td>/</td><td>/</td></tr><tr><td>LSM</td><td>0.0218</td><td>0.0408</td><td>0.0025</td><td>0.1535</td><td>0.0065</td><td>0.0059</td><td>0.0050</td></tr><tr><td>PROMOTION</td><td>4.8%</td><td>13.0%</td><td>26.5%</td><td>0.4%</td><td>15.6%</td><td>9.2%</td><td>10.7%</td></tr></table></body></html>
+
+$^*$ Top 5 ranking methods of solid benchmarks: LSM (ours), U-NO (2022), U-FNO (2021), FNO (2021), F-FNO (2023). Top 5 ranking methods of fluid benchmarks: LSM (ours), HT-Net (2022), WMT (2021), U-Net (2015), F-FNO (2023). $\ddagger$ All the experiments in Elasticity. $\mathbf{\nabla\cdotP}$ adopt the special transformation from geo-FNO (2022) to handle the point cloud geometric. Especially, FNO (2021) with the special transformation is just equivalent to geo-FNO (2022).  
+
+Ablations. To verify the effectiveness of each component in LSM, we provide detailed ablations, covering both removing components $(w/o)$ and replacing projector $(r e p)$ experiments. From Table 3, we have the following observations.  
+
+In removing experiments, we can find that all components are essential to the final performance. Without the projector, model performance on both benchmarks will drop seriously, demonstrating the necessity of solving PDEs in latent space. Besides, the neural spectral block also reduces the estimation error significantly: $13.8\%$ - $0.0253{\scriptstyle\rightarrow}0.0218$ - in Elasticity-P and $13.3\%$ $\mathrm{0.0075{\rightarrow}0.0065}$ in Darcy. We can also find that the multiscale design can fit the Darcy benchmark well and the patchify operation is essential to the Elasticity-P benchmark, where the former always presents the multiphase flow and the latter mainly relies on the local information, showing that LSM can cover physical states in different scales and regions adaptively.  
+
+Table 3. Ablations on hierarchical projection network (Projection, Multiscale, Patchify) and neural spectral block (Spectral). We conduct two types of experiments: replacing our attention-based projector with other designs (rep) and removing components (w/o). Efficiency is calculated on inputs with size $256\times256$ and batch size as 1. See Appendix D for full results.   
+
+
+<html><body><table><tr><td colspan="2">DESIGnS</td><td rowspan="2">#PARAM #MEM #TIME</td><td rowspan="2">(MB)</td><td colspan="2">MSE ELAS-P DARCY</td></tr><tr><td>Conv</td><td>(MB)</td><td>(S/ITER)</td></tr><tr><td rowspan="2">REP</td><td>AVGPOOL</td><td>1.947 1.836</td><td>2.793 0.037 1.748 0.028</td><td>0.0236 0.0081 0.0243 0.0077</td></tr><tr><td>SELF-ATTN</td><td>2.002 7.188</td><td>0.064</td><td>0.0245 0.0082</td></tr><tr><td rowspan="4">w/0</td><td>PROJECTOR</td><td>1.836 2.793</td><td>0.035</td><td>0.0563 0.0080</td></tr><tr><td>MULTISCALE</td><td>0.079 1.757</td><td>0.020</td><td>0.0269 0.0123</td></tr><tr><td>PATCHIFY</td><td>2.002 1.748</td><td>0.062</td><td>0.0545 0.0068</td></tr><tr><td>SPECTRAL</td><td>1.990 1.913</td><td></td><td>0.034 |0.0253 0.0075</td></tr><tr><td colspan="2">OURS</td><td>2.002 1.914</td><td></td><td>0.041 |0.0218 0.0065</td></tr></table></body></html>  
+
+In experiments of replacing our hierarchical projector, we observe that the convolution (Conv) and canonical selfattention (Self-Attn, 2017) will damage both efficiency and accuracy, since they still solve PDEs in the high-dimensional coordinate space. Although average pooling $(A\nu g P o o l)$ can efficiently eliminate coordinate information, without latent tokens as physics prompts, it cannot capture the essential physical information and thus impairs accuracy. This verifies the efficacy of our hierarchical projection network.  
+
+![](images/a0613efd3bda930b8e52369082c728ba1f8696e7d3751d8a01560d346b901e30.jpg)  
+Figure 4. Top: showcases of fluid physics on Darcy (lft) and Arol (right) bottom: showcases of solid physics on Elasticity-P (left and Plasticity (right). We present the last timestamp $\ensuremath{T}=20\$ ) for Plasticity here, which is a time-dependent task. For clearness, we also plot the prediction error, namely $\{\pmb{y}(\mathbf{s})-\pmb{\widehat{y}}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}$ . See Appendix C for more showcases.  
+
+Showcases. To present an intuitive comparison among different methods, we provide several showcases from representative benchmarks in Figure 4. Generally, LSM achieves impressive performance on both solid and fluid benchmarks. Especially, for the Airfoil benchmark, LSM is the only model that precisely captures the shock wave around the airfoil, which is vital for practical design. Note that the Airfoil benchmark is to estimate the airflow velocity from the airfoil structure, where the input and output are semantically heterogeneous, demonstrating the universal approximation capacity of LSM. Besides, LSM also surpasses FNO and U-NO in estimating the inner stress of elastic materials and the future mesh deformation in plastic materials, verifying the model capability in processing complex geometrics.  
+
+### 4.2. Model Analysis  
+
+Efficiency. From Figure 5, we can find that LSM achieves a good trade-off between accuracy and efficiency. For solid physics, although U-NO (Rahman et al., 2022) is the secondbest model and slightly more efficient than LSM, LSM surpasses U-NO by a large margin, concretely $15.6\%$ $12.8\%$ and $26.5\%$ relative promotion in Elasticity-P, Elasticity-G and Plasticity respectively. For fluid physics, LSM is more accurate and efficient than the previous top three baselines: HT-Net, WMT and U-Net. It is notable that F-FNO is much more lightweight than others, but its running time and accuracy are still comparable to other baselines. Thus, in comparison to the lightweight model F-FNO, LSM is still more favorable for real-world applications due to the remarkable accuracy advantage. See Table 13 in Appendix for a comprehensive comparison.  
+
+![](images/e00d7d2980831374e828695a5f7791d4e2adbf0b3d573b3bbc0dbd1a0d51f4a1.jpg)  
+Figure 5. Efficiency comparison for the top 5 models on the benchmarks of solid and fluid physics. Running time is evaluated on inputs with size $256\times256$ and batch size as 1.  
+
+Solving process visualization.We visualize the solving process of LSM in Figure 6. From Figure 6(a) and (b), we can easily recognize the projection and the PDE-solving process. Especially, for the Darcy benchmark, whose input and output are semantically heterogeneous, empowered by neural spectral block, LSM can present a distinct transformation in latent space to capture this complex mapping. Besides, we also provide a case for the time-dependent task from  
+
+![](images/14fd52152c2024920dc810e3d8e98d99e110b51a58877d3dd1f1447e740df6b9.jpg)  
+Figure 6. Visualization of solving process. Through PCA algorithm (Joliffe & Cadima, 2016), we plot the input features $\{\pmb{x}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}$ A latent input tokens $\{\mathbf{T}_{\pmb{x}}\}$ , latent output tokens $\left\{\mathbf{T}_{\mathbf{\Phi}^{}\mathbf{y}}\right\}$ and output features $\{{\widehat{\pmb{y}}}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}}$ into a 2D plane. All the data are from the test set.  
+
+Table 4. Transfer the model pre-trained from fulldata Pipe to limited-data Airol. The results are presented in the formalization of $a\rightarrow b$ A where $a$ is the model performance when it is trained from scratch and $b$ is the performance finetuned from the Pipe pre-trained model. Since U-NO degenerates seriously in limited data situations, we do not take its $20\%$ and $40\%$ cases into comparison (colored in gray).  
+
+<html><body><table><tr><td>MSE(x10-2)]</td><td>20% AIRFOIL DATA</td><td>40% AIRFOIL DATA</td><td>60% AIRFOIL DATA</td><td> 80% AIRFOIL DATA |100% AIRFOIL DATA</td></tr><tr><td>U-NET (2015)</td><td>1.88>1.93 (-2.7%)</td><td>1.38->1.14 (+17.3%)</td><td>0.96->0.90 (+6.3%)</td><td>0.85>0.81 (+4.7%)|0.79->0.77 (+2.5%)</td></tr><tr><td>U-NO (2022)</td><td>6.30->1.72</td><td>2.391.73</td><td>1.10->1.00 (+9.1%)</td><td>0.860.82 (+4.7%) 0.780.82 (-5.1%)</td></tr><tr><td></td><td></td><td>HT-NET (2022)|1.73>1.43 (+17.3%)|1.08>0.82 (+24.1%)</td><td>0.75>0.69 (+8.0%)</td><td>0.70>0.65 (+7.1%)|0.65>0.61 (+6.2%)</td></tr><tr><td>LSM</td><td></td><td></td><td></td><td>1.661.31 (+21.1%)|0.910.75 (+17.6%)|0.69-0.61 (+11.6%)|0.630.58 (+7.9%)|0.590.55 (+6.8%)</td></tr></table></body></html>  
+
+![](images/442b3b8a5edcadac54d628344af7c501f3e70b8b515978d7c88fcfa160ca774a.jpg)  
+Figure 7. Model performance of Darcy under different resolutions.  
+
+the Navier-Stokes benchmark. As shown in Figure 6(c), by plotting the learned features over time, we can find that the latent input tokens present a similar process as the input features, demonstrating that LSM can precisely capture the latent process from high-dimensional coordinate space.  
+
+Performance under various resolutions. We also evaluate the model performance on the Darcy benchmark with various resolutions ranging from $32\times32$ to $1024\times1024$ in Figure 7. LSM presents a stable performance w.r.t. different inputs and consistently surpasses other baselines in all resolutions, presenting good capacity in solving high-dimensional PDEs. Besides, it is also notable that HT-Net degenerates in extremely high-dimensional setting, which is presented as a hierarchical Transformer, while FNO and its variants perform well. This indicates that there exist complex mappings between input-output pairs of high-dimensional PDEs, where even the most advanced deep models may fail without specific designs for mapping approximation.  
+
+Transferability. As shown in Table 4, we evaluate the model transferability by finetuning the model trained on Pipe to Airfoil. We can find that LSM consistently presents the positive transfer under all limited data situations, which is meaningful for applications. Besides, it is also observed that LSM performs best in both with and without pretraining cases. Note that both two benchmarks are governed by Navier-stokes equations but with distinct boundary conditions, indicating that LSM can learn the intrinsic physical information from unwieldy high-dimensional data.  
+
+## 5. Conclusions and Future Work  
+
+In this paper, we present LSM for solving high-dimensional PDEs. Instead of directly solving PDEs in coordinate space, LSM can efficiently reduce the high-dimensional data into compact latent space by a hierarchical projection network and approximate complex mappings by neural spectral block under theoretical guarantees. Benefiting from the above designs, LSM achieves consistent state-of-the-art in both solid and fluid benchmarks and presents a good trade-off between accuracy and efficiency, making itself a promising PDE solver for real-world applications. In the future, we further explore the generalization capability of LSM among different PDEs to pursue a foundation model.  
+
+# Acknowledgements  
+
+This work was supported by the National Key Research and Development Plan (2021YFC3000905), National Natural Science Foundation of China (62022050 and 62021002), and Beijing Nova Program (Z201100006820041).  
+
+References   
+Brandolini, L., Colzani, L., Robins, S., and Travaglini, G. Pick's theorem and convergence of multiple fourier series. Am. Math. Mon., 2020.   
+Brown, T., Mann, B., Ryder, N., Subbiah, M., Kaplan, J. D., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., Agarwal, S., Herbert-Voss, A., Krueger, G., Henighan, T., Child, R., Ramesh, A., Ziegler, D., Wu, J., Winter, C., Hesse, C., Chen, M., Sigler, E., Litwin, M., Gray, S., Chess, B., Clark, J., Berner, C., McCandlish, S., Radford, A., Sutskever, I., and Amodei, D. Language models are few-shot learners. In NeurIPS, 2020.   
+Brunton, S. L., Budisic, M., Kaiser, E., and Kutz, J. N. Modern koopman theory for dynamical systems. SIAM Rev., 2021.   
+Cao, S. Choose a transformer: Fourier or galerkin. In NeurIPS, 2021.   
+Chen, T. and Chen, H. Universal approximation to nonlinear operators by neural networks with arbitrary activation functions and its application to dynamical systems. IEEE Trans. Neural Netw. Learn. Syst., 1995.   
+Devlin, J., Chang, M.-W., Lee, K., and Toutanova, K. Bert: Pre-training of deep bidirectional transformers for language understanding. In NAACL, 2019.   
+Dosovitskiy, A., Beyer, L., Kolesnikov, A., Weissenborn, D., Zhai, X., Unterthiner, T., Dehghani, M., Minderer, M., Heigold, G., Gelly, S., Uszkoreit, J., and Houlsby, N. An image is worth 16x16 words: Transformers for image recognition at scale. In ICLR, 2021.   
+Dyachenko, M. The rate of u-convergence of multiple fourier series. Acta Mathematica Hungarica, 1995.   
+Evans, L. C. Partial differential equations. American Mathematical Soc., 2010.   
+Fanaskov, V. and Oseledets, I. Spectral neural operators. arXiv preprint arXiv:2205.10573, 2022.   
+Fornberg, B. A practical guide to pseudospectral methods. Cambridge university press, 1998.   
+Gottlieb, D. and Orszag, S. A. Numerical analysis of spectral methods: theory and applications. SIAM, 1977.   
+Grossmann, C., Roos, H.-G., and Stynes, M. Numerical treatment of partial differential equations. Springer, 2007.   
+Gupta, G., Xiao, X., and Bogdan, P. Multiwavelet-based operator learning for differential equations. In NeurIPS, 2021.   
+Han, J., Jentzen, A., and E, W. Solving high-dimensional partial differential equations using deep learning. PNAS, 2017.   
+Hao, Z., Liu, S., Zhang, Y., Ying, C., Feng, Y., Su, H., and Zhu, J. Physics-informed machine learning: A survey on problems, methods and applications. arXiv preprint arXiv:2211.08064, 2022.   
+He, K., Zhang, X., Ren, S., and Sun, J. Deep residual learning for image recognition. CVPR, 2016.   
+Jackson, D. The convergence of fourier series. American Mathematical Monthly, 1934.   
+Jolliffe, I. T. and Cadima, J. Principal component analysis: a review and recent developments. Philosophical Transactions of the Royal Society A: Mathematical, Physical and Engineering Sciences, 2016.   
+Karniadakis, G. E., Kevrekidis, I. G., Lu, L., Perdikaris, P., Wang, S., and Yang, L. Physics-informed machine learning. Nat. Rev. Phys., 2021.   
+Kingma, D. P. and Ba, J. Adam: A method for stochastic optimization. In ICLR, 2015.   
+Kopriva, D. A. Implementing spectral methods for partial differential equations: Algorithms for scientists and engineers. Springer Science & Business Media, 2009.   
+Li, Z., Kovachki, N. B., Azizzadenesheli, K., liu, B., Bhattacharya, K., Stuart, A., and Anandkumar, A. Fourier neural operator for parametric partial differential equations. In ICLR, 2021.   
+Li, Z.-Y., Kovachki, N. B., Azizzadenesheli, K., Liu, B., Bhattacharya, K., Stuart, A., and Anandkumar, A. Neural operator: Graph kernel network for partial differential equations. arXiv preprint arXiv:2003.03485, 2020.   
+Li, Z.-Y., Huang, D. Z., Liu, B., and Anandkumar, A. Fourier neural operator with learned deformations for pdes on general geometries. arXiv preprint arXiv:2207.05209, 2022.   
+Liu, X., Xu, B., and Zhang, L. HT-net: Hierarchical transformer based operator learning model for multiscale PDEs. arXiv preprint arXiv:2210.10890, 2022.   
+Liu, Z., Lin, Y., Cao, Y., Hu, H., Wei, Y., Zhang, Z., Lin, S. C.-F., and Guo, B. Swin transformer: Hierarchical vision transformer using shifted windows. ICCV, 2021.   
+Lu, L., Jin, P., Pang, G., Zhang, Z., and Karniadakis, G. E. Learning nonlinear operators via deeponet based on the universal approximation theorem of operators. Nat. Mach. Intell, 2021.   
+McLean, D. Continuum fluid mechanics and the navierstokes equations. Understanding Aerodynamics: Arguing from the Real Physics, 2012.   
+Morrison, F. A. An introduction to fluid mechanics. Cambridge University Press, 2013.   
+Nayak, L., Das, G., and Ray, B. An estimate of the rate of convergence of fourier series in the generalized holder metric by deferred cesaro mean. J. Math. Anal. Appl, 2014.   
+Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killen, T., Lin, Z., Gimelshein, N., Antiga, L., Desmaison, A., Kopf, A., Yang, E., DeVito, Z., Raison, M., Tejani, A., Chilamkurthy, S., Steiner, B., Fang, L., Bai, J., and Chintala, S. Pytorch: An imperative style, high-performance deep learning library. In NeurIPS, 2019.   
+Raffel, C., Shazeer, N., Roberts, A., Lee, K., Narang, S., Matena, M., Zhou, Y., Li, W., Liu, P. J., et al. Exploring the limits of transfer learning with a unified text-to-text transformer. J. Mach. Learn. Res., 2020.   
+Rahman, M. A., Ross, Z. E., and Azizzadenesheli, K. U-no: U-shaped neural operators.  arXiv preprint arXiv:2204.11127, 2022.   
+Raissi, M., Perdikaris, P., and Karniadakis, G. E. Physicsinformed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. J. Comput. Phys., 2019.   
+Ronneberger, O., Fischer, P., and Brox, T. U-net: Convolutional networks for biomedical image segmentation. In MICCAI, 2015.   
+Roubicek, T. Nonlinear partial differential equations with applications. Springer Science & Business Media, 2013.   
+Solin, P. Partial differential equations and the finite element method. John Wiley & Sons, 2005.   
+Temam, R. Navier-Stokes equations: theory and numerical analysis. American Mathematical Soc., 2001.   
+Tolstov, G. P. Fourier series. Courier Corporation, 2012.   
+Tran, A., Mathews, A., Xie, L., and Ong, C. S. Factorized fourier neural operators. In ICLR, 2023.   
+Trunk, G. V. A problem of dimensionality: A simple example. TPAMI, 1979.   
+Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L. u., and Polosukhin, I. Attention is all you need. In NeurIPs, 2017.   
+Wang, R., Kashinath, K., Mustafa, M., Albert, A., and Yu, R. Towards physics-informed deep learning for turbulent flow prediction. KDD, 2019.   
+Wang, S., Teng, Y., and Perdikaris, P. Understanding and mitigating gradient pathologies in physics-informed neural networks. SIAM J. Sci. Comput., 2020a.   
+Wang, S., Yu, X., and Perdikaris, P. When and why pinns fail to train: A neural tangent kernel perspective. J. Comput. Phys., 2020b.   
+Wazwaz, A. M. Partial differential equations $\because$ methods and applications. 2002.   
+Weinan, E. and Yu, T. The deep ritz method: A deep learning-based numerical algorithm for solving variational problems. Commun. Math. Stat., 2017.   
+Wen, G., Li, Z.-Y., Azizzadenesheli, K., Anandkumar, A., and Benson, S. M. U-fno - an enhanced fourier neural operator based-deep learning model for multiphase flow. arXiv preprint arXiv:2109.03697, 2021.   
+Xiong, W., Huang, X., Zhang, Z., Deng, R., Sun, P., and Tian, Y. Koopman neural operator as a mesh-free solver of non-linear partial differential equations. arXiv preprint arXiv:2301.10022, 2023a.   
+Xiong, W., Ma, M., Huang, X., Zhang, Z., Sun, P., and Tian, Y. Koopmanlab: machine learning for solving complex physics equations. arXiv preprint arXiv:2301.01104, 2023b.  
+
+# A. Proofs of Theorems 3.6  
+
+First, we would like to present a well-established theorem, whose proof can be found in the cited paper.  
+
+Theorem A.1. (Nayak et al., 2014) Let $f:\mathbb{R}\to\mathbb{R}$ be a $2\pi$ periodic function. Its trigonometric approximation $f^{N}$ is defined as:  
+
+$$
+f^{N}(x)=\sum_{k=-N}^{N}\left({\frac{1}{2\pi}}\int_{-\pi}^{\pi}f(t)e^{-i k t}\mathrm{d}t\right)e^{i k x},
+$$  
+
+If $f$ satisfies the Lipschitz condition, then there is a constant $K$ that does not depend on $f$ nor $N$ , such that:  
+
+$$
+|f(x)-f^{N}(x)|\leq{\frac{K\ln N}{N}},\forall x\in\mathbb{R}.
+$$  
+
+Lemma A.2. Given $f:[0,\pi]\to\mathbb{R}$ and $g(x)=f(x)-x,\forall x\in[0,\pi]$ If $f$ satisfies the Lipschitz condition, then g also satisfies the Lipschitz condition.  
+
+Proof. Suppose that $f$ satisfies the Lipschitz condition, then there is a constant $K$ , such that  
+
+$$
+|f(x)-f(y)|\leq K|x-y|,\forall x,y\in[0,\pi].
+$$  
+
+Then, we have the following inequations:  
+
+$$
+\begin{array}{r}{-g(\boldsymbol{y})\vert=\vert f(\boldsymbol{x})-\boldsymbol{x}-(f(\boldsymbol{y})-\boldsymbol{y})\vert\le\vert f(\boldsymbol{x})-f(\boldsymbol{y})\vert+\vert x-\boldsymbol{y}\vert\le(K+1)\vert x-\boldsymbol{y}\vert,\forall\boldsymbol{x},\boldsymbol{y}\in[0,\pi].}\end{array}
+$$  
+
+Thus, $g$ also satisfies the Lipschitz condition.  
+
+Lemma A.3. Given $f:[-\pi,\pi]\to\mathbb R$ and $f(x)=f(-x),\forall x\in[0,\pi]$ If $f$ satisfies the Lipschitz condition within $[0,\pi]$ then $f$ also satisfies Lipschitz condition in $[-\pi,\pi]$  
+
+Proof. Suppose that $f$ satisfies the Lipschitz condition in $[0,\pi]$ , then there is a constant $K$ , such that  
+
+$$
+|f(x)-f(y)|\leq K|x-y|,\forall x,y\in[0,\pi].
+$$  
+
+$\forall x,y\in[-\pi,\pi]$ , if $x y\ge0$ , we obvisouly have $|f(x)-f(y)|\leq K|x-y|$  
+
+Next, we will prove Theorem 3.6, which shows the convergence property of trigonometric approximation with residual.  
+
+Proof. For simplification, we define $g(x)=f(x)-x,\forall x\in[0,\pi]$ . From Lemma A.2, $g$ holds the Lipschitz condition as $f$ . Then we would like to extend $g:[0,\pi]\to\mathbb{R}$ to a $2\pi$ periodic function $g_{\mathrm{extend}}:\mathbb{R}\to\mathbb{R}$ .Firstly, we define $\widehat{g}_{\mathrm{extend}}:[-\pi,\pi]\to\mathbb{R}$ as:  
+
+$$
+{\widehat{g}}_{\mathrm{extend}}(x)={\left\{\begin{array}{l l}{g(x),}&{{\mathrm{If~}}x\in[0,\pi]}\\ {g(-x),}&{{\mathrm{If~}}x\in[-\pi,0),}\end{array}\right.}
+$$  
+
+Further, we define the $2\pi$ -periodic function $g_{\mathrm{extend}}:\mathbb{R}\to\mathbb{R}$ as follows:  
+
+$$
+\begin{array}{r l}&{g_{\mathrm{extend}}(x)=\widehat{g}_{\mathrm{extend}}\Big(\operatorname{Normalize}(x)\Big),\mathrm{~where~}}\\ &{\operatorname{Normalize}(x)=\left\{x-\mathrm{sgn}(x)\big(\lceil\frac{|x|-\pi}{2\pi}\rceil\times2\pi\big),\right.\mathrm{~if~}|x|>\pi}\\ &{\mathrm{~otherwise},}\end{array}
+$$  
+
+where $\mathrm{sgn}(\cdot)$ is the sign function, whose values is 1 for positive inputs, $-1$ for negative inputs, O for zero inputs.  
+
+Considering the definition of neural spectral block in Eq. (8), we can find the following parameters in the neural spectral block will satisfy Eq. (12):  
+
+$$
+\begin{array}{l}{\displaystyle{{\bf w}_{0}=\left[\frac{1}{2\pi}\int_{-\pi}^{\pi}g_{\mathrm{extend}}(t)\mathrm{d}t\right]}}\\ {\displaystyle{{\bf w}_{\mathrm{sin}}=\left[\frac{1}{\pi}\int_{-\pi}^{\pi}g_{\mathrm{extend}}(t)\sin(t)\mathrm{d}t,\cdots,\frac{1}{\pi}\int_{-\pi}^{\pi}g_{\mathrm{extend}}(t)\sin(\frac{N}{2}t)\mathrm{d}t\right]}}\\ {\displaystyle{{\bf w}_{\mathrm{cos}}=\left[\frac{1}{\pi}\int_{-\pi}^{\pi}g_{\mathrm{extend}}(t)\cos(t)\mathrm{d}t,\cdots,\frac{1}{\pi}\int_{-\pi}^{\pi}g_{\mathrm{extend}}(t)\cos(\frac{N}{2}t)\mathrm{d}t\right].}}\end{array}
+$$  
+
+Then, we have the canonical trigonometric approximation of $g_{\mathrm{extend}}$ 3 $g_{\mathrm{extend}}^{N}$ , wWhich is defined as follows:  
+
+$$
+\mathbf{\Sigma}_{\mathrm{nd}}(x)=\mathbf{w}_{0}+\mathbf{w}_{\mathrm{sin}}\left[\sum_{\substack{\sin\left(\frac{N}{2}x\right)}}^{\sin\left(x\right)}\right]+\mathbf{w}_{\mathrm{cos}}\left[\sum_{\substack{\cos\left(\frac{N}{2}x\right)}}^{\cos\left(x\right)}\right]=\sum_{k=-\frac{N}{2}}^{\frac{N}{2}}\left(\frac{1}{2\pi}\int_{-\pi}^{\pi}g_{\mathrm{extend}}(t)e^{-i k t}\mathrm{d}t\right)e^{i k x},\forall x\in\mathbb{Z}.
+$$  
+
+If $f$ satisfies the Lipschitz condition, from Lemma A.2 and Lemma A.3, we have that $\widehat{g}_{\mathrm{extend}}$ satisfies the Lipschitz condition Since $\widehat{g}_{\mathrm{extend}}:[-\pi,\pi]\to\mathbb{R}$ satisfies ${\widehat{g}}_{\mathrm{extend}}(x)={\widehat{g}}_{\mathrm{extend}}(-x)$ , then $\forall x,y\in\mathbb{R}$ , there is a constant $K^{\prime}$ , such that:  
+
+$$
+\begin{array}{r l}&{|g_{\mathrm{extend}}(x)-g_{\mathrm{extend}}(y)|=\Big|\widehat{g}_{\mathrm{extend}}\left(|\operatorname{Normalize}(x)|\right)-\widehat{g}_{\mathrm{extend}}\left(|\operatorname{Normalize}(y)|\right)\Big|}\\ &{\qquad=\Big|g\left(|\operatorname{Normalize}(x)|\right)-g\left(|\operatorname{Normalize}(y)|\right)\Big|}\\ &{\qquad\leq K^{\prime}\Big||\operatorname{Normalize}(x)|-|\operatorname{Normalize}(y)|\Big|}\\ &{\qquad\leq K^{\prime}|x-y|.\quad\mathrm{(Similardiscussion~as~Lemma~A.3)}}\end{array}
+$$  
+
+For the last inequation of Eq. (17), if $|x-y|\ge\pi$ , the inequation obviously holds. If $|x-y|<\pi$ and $x,y\in[n\pi,(n+1)\pi],n\in$ $\mathbb{Z}$ , then we have $\Big||\operatorname{Normalize}(x)|-|\operatorname{Normalize}(y)|\Big|=|x-y|$ . As for $|x-y|<\pi$ and $x\leq2n\pi\leq y,n\in\mathbb{Z}$ (suppose $x\leq y$ without loss of generality), we have  
+
+$$
+\Big||\operatorname{Normalize}(x)|-|\operatorname{Normalize}(y)|\Big|=\Big|(2n\pi-x)-(y-2n\pi)\Big|\leq\Big|(2n\pi-x)+(y-2n\pi)\Big|=|x-y|,
+$$  
+
+As for $|x-y|<\pi$ and $x\leq(2n+1)\pi\leq y,n\in\mathbb{Z}$ we have  
+
+$$
+\begin{array}{r l}&{\Big||\operatorname{Normalize}(x)|-|\operatorname{Normalize}(y)|\Big|=\Big|\left(\pi-\left((2n+1)\pi-x\right)\right)-\left(\pi-(y-(2n+1)\pi)\right)\Big|}\\ &{\qquad=\Big|\left(y-(2n+1)\pi\right)-\left((2n+1)\pi-x\right)\Big|}\\ &{\qquad\leq\Big|(y-(2n+1)\pi)+((2n+1)\pi-x)\Big|}\\ &{\qquad=|x-y|.}\end{array}
+$$  
+
+Thus, $g_{\mathrm{extend}}$ also satisfies the Lipschitz condition.  
+
+Thus, from Theorem A.1, we have that $g_{\mathrm{extend}}^{N}$ converges to $g_{\mathrm{extend}}$ with the speed as follows:  
+
+$$
+|g_{\mathrm{extend}}(x)-g_{\mathrm{extend}}^{N}(x)|\leq\frac{K\ln\frac{N}{2}}{\frac{N}{2}},\forall x\in\mathbb{R},
+$$  
+
+where $K$ is a constant. From the definition of Eq. (8), $\forall x\in[0,\pi]$ , we have $f^{N}(x)=x+g_{\mathrm{extend}}^{N}(x)$ then  
+
+$$
+{\begin{array}{r l}&{|f(x)-f^{N}(x)|={\bigg|}\left(g_{\mathrm{extend}}(x)+x\right)-\left(g_{\mathrm{extend}}^{N}(x)+x\right){\bigg|}}\\ &{\qquad={\bigg|}g_{\mathrm{extend}}(x)-g_{\mathrm{extend}}^{N}(x){\bigg|}\leq{\frac{K\ln{\frac{N}{2}}}{{\frac{N}{2}}}}\leq{\frac{(2K)\ln N}{N}},\forall x\in[0,\pi].}\end{array}}
+$$  
+
+<html><body><table><tr><td rowspan="2">DESCRIPTIONSE</td><td colspan="2">SOLiD PHysicS</td><td colspan="5">FLUID PHYSICS</td></tr><tr><td>|ELASTICITY-P|ELASTICITY-G|</td><td></td><td>PLASTICITY</td><td>NAVIER-STOKES</td><td>AIRFOIL</td><td>PIPE</td><td>DARCY</td></tr><tr><td>PDES</td><td></td><td colspan="2"> PDES OF SOLID MATERIAL</td><td colspan="3">NAVIER-STOKES EQUATION</td><td>DARCY'S LAW</td></tr><tr><td></td><td></td><td>ESTIMATE STRESS</td><td> MODEL DEFORMATION | PREDICT FUTURE </td><td></td><td>ESTIMATE VELOCITY</td><td></td><td>ESTIMATE PRESSURE</td></tr><tr><td>INPUT</td><td>MATERIAL STRUCTURE</td><td></td><td>BOUNDARY CONDITION|</td><td>PAST VELOCITY</td><td>STRUCTURE</td><td></td><td> POROUS MEDIUM</td></tr><tr><td>OUTPUT TRAIN SET SIZE</td><td></td><td>INNER STRESS</td><td>MESH DISPLACEMENT</td><td>FUTURE VELOCITY</td><td>FLUID VELOCITY</td><td></td><td>FLUID PRESSURE</td></tr><tr><td></td><td>1000</td><td>1000</td><td>900</td><td>1000</td><td>1000</td><td>1000</td><td>1000</td></tr><tr><td>TEST SET SIZE</td><td>200</td><td>200</td><td>80</td><td>200</td><td>100</td><td>200</td><td>200</td></tr><tr><td> INPUT TENSOR</td><td>(/, 972, 2)</td><td>|(/,41  41,1)|</td><td>(/, 101  31, 2)</td><td>(10, 64  64, 1)</td><td>|(/, 200  50, 2)|(/, 129  129, 2)|</td><td></td><td>(/, 85  85, 1)</td></tr><tr><td>OUTPUT TENSOR|</td><td>(/, 972, 1)</td><td>|(/,41  41, 1)|</td><td>(20, 101  31, 4)</td><td>(10, 64  64, 1)</td><td></td><td>|(/, 200  50, 1)|(/, 129  129, 1)|</td><td>(/, 85  85, 1)</td></tr></table></body></html>  
+
+# B. Details for Benchmarks  
+
+Ve have summarized benchmark configurations in Table 5. Here are the generation detail categorized by governing PDES.  
+
+## B.1. Solid Material  
+
+The governing equation of solid material is:  
+
+$$
+\rho^{s}\frac{\partial^{2}\pmb{u}}{\partial t^{2}}+\nabla\cdot\pmb{\sigma}=0,
+$$  
+
+where $\rho^{s}\in\mathbb{R}$ means the solid density, $\nabla$ denotes the nabla operator. $\mathbf{\Delta}_{\pmb{u}}$ is a function that represents the displacement vector of material over time $t.\sigma$ denotes the stress tensor. Elasticity-P, Elasticity-G and Plasticity (Li et al., 2022) share the same governing equation as shown in Eq. (20).  
+
+Elasticity-P and Elasticity-G.These benchmarks are to estimate the inner stress of an incompressible material with an arbitrary void at the center of the material. Besides, an external tension is applied to the material. The input is the structure of the material, and the output is inner stress. Elasticity-P and Elasticity-G difer in the way modeling the geometric of material: Elasticity-P uses a point cloud with 972 points, while Elasticity-G presents the data in a regular grid with the size of $41\times41$ , which is interpolated from Elasticity-P.  
+
+Plasticity. This benchmark focuses on the plastic forging problem, where a plastic material is impacted from above by an arbitrary-shaped die. The input is the shape of the die, which is recorded in structured mesh. And the output is the deformation of each mesh point in the future 20 time steps. The resolution of the structured mesh is $101\times31$  
+
+## B.2. Navier-Stokes Equation  
+
+The differential form of fluid dynamics equations are:  
+
+$$
+\begin{array}{r}{\displaystyle\frac{\partial\rho}{\partial t}+\nabla\cdot(\rho\boldsymbol{U})=0\ ~}\\ {\displaystyle\frac{\partial\boldsymbol{U}}{\partial t}+\boldsymbol{U}\cdot\nabla\boldsymbol{U}=\boldsymbol{f}+\frac{1}{\rho}\nabla\cdot(\boldsymbol{T}_{i j}\boldsymbol{e}_{i}\boldsymbol{e}_{j})\ ~}\\ {\displaystyle\frac{\partial(e+\frac{1}{2}\boldsymbol{U}^{2})}{\partial t}+\boldsymbol{U}\cdot\nabla(e+\frac{1}{2}\boldsymbol{U}^{2})=\boldsymbol{f}\cdot\boldsymbol{U}+\frac{1}{\rho}\nabla\cdot(\boldsymbol{U}\cdot\boldsymbol{T}_{i j}\boldsymbol{e}_{i}\boldsymbol{e}_{j})+\frac{\lambda}{\rho}\Delta T,}\end{array}
+$$  
+
+where Eq. (21), Eq. (2) and Eq. (23) describe the mass, momentum and energy conservation respectively. Here $\rho$ is the density, $\pmb{U}$ is the velocity vector, $f$ is the external force, $e$ is the internal energy. And $_{T}$ is the stress tensor in the fluid, $e$ is the basis vector and $\pmb{T}_{i j}\pmb{e}_{i}\pmb{e}_{j}$ follows the Einstein summation convention. All above variates are related to both space and time. $\scriptstyle{\frac{\lambda}{\rho}}\Delta T$ is for heat conduction. For a Newtonian fluid, the stress tensor $_{T}$ is related to the pressure $p$ , viscosity coefficient $\nu$ and velocity vector $\boldsymbol{\tau}$ . Thus, for the Newtonian fluid, Eq. (22) can be rewritten as:  
+
+$$
+\frac{\partial\pmb{U}}{\partial t}+\pmb{U}\cdot\nabla\pmb{U}=\pmb{f}-\frac{1}{\rho}\nabla p+\nu\nabla^{2}\pmb{U}.
+$$  
+
+Besides, Eq. (23) can also be deduced in a similar way, but the result is too complex to be presented in this paper. See (McLean, 2012) for more details. The dynamics equations for Newtonian fluid are well-known as Navier-Stokes equations. Next, we will detail the underlying PDEs for our fluid benchmarks.  
+
+Navier-Stokes.We take the Navier-Stokes dataset from (Li et al., 2021). This dataset simulates incompressible and viscous flow on the unit torus, where the density of fluid is unchangeable ( $\overset{\cdot}{\rho}$ in Eq. (21). In this situation, the energy conservation presented in Eq. (23) is independent of mass and momentum conservation. Hence, the fluid dynamics can be deduced with Eq. (21) and Eq. (24):  
+
+$$
+\begin{array}{c}{\boldsymbol{\nabla}\cdot\boldsymbol{U}=0}\\ {\displaystyle\frac{\partial\boldsymbol{w}}{\partial t}+\boldsymbol{U}\cdot\boldsymbol{\nabla}\boldsymbol{w}=\nu\nabla^{2}\boldsymbol{w}+f}\\ {\displaystyle\boldsymbol{w}|_{t=0}=w_{0},}\end{array}
+$$  
+
+where $\pmb{U}=(u,v)$ is a velocity vector in 2D field, $\begin{array}{r}{w=|\nabla\times\pmb{U}|=\frac{\partial u}{\partial y}-\frac{\partial v}{\partial x}}\end{array}$ is the vorticity, $w_{0}\in\mathbb{R}$ is the initial vorticity 1 $t=0$ . In this dataset, viscosity $\nu$ is set as $10^{-5}$ and the resolution of the 2D field is $64\times64$ . Each generated sample contains 20 successive frames and the task is to predict the future 10 frames based on the past 10 frames.  
+
+Pipe. This dataset (Li et al., 2022) focuses on the incompressble flow through a pipe. The governing equations are similarly deduced with Eq. (21) and Eq. (24):  
+
+$$
+\begin{array}{c}{\displaystyle\nabla\cdot\pmb{U}=0}\\ {\displaystyle\frac{\partial\pmb{U}}{\partial t}+\pmb{U}\cdot\nabla\pmb{U}=\pmb{f}-\frac{1}{\rho}\nabla p+\nu\nabla^{2}\pmb{U}.}\end{array}
+$$  
+
+The dataset is generated in the geometric of structured mesh with the resolution of $129\times129$ . For experiments, we adopt the mesh structure as the input data, and the output is the horizonal fluid velocity within the pipe.  
+
+Airfoil. The airfoil dataset (Li et al., 2022) is about the transonic flow over an airfol. Since the viscosity of air is quite small, the viscous term $\nu\nabla^{2}U$ can be ignored in the Navier-Stokes equation. Thus, the governing equations for this situation can be presented as follows:  
+
+$$
+\begin{array}{r}{\displaystyle\frac{\partial\rho^{f}}{\partial t}+\nabla\cdot(\rho^{f}\pmb{U})=0}\\ {\displaystyle\frac{\partial\rho^{f}\pmb{U}}{\partial t}+\nabla\cdot(\rho^{f}\pmb{U}\pmb{U}+p\mathbb{I})=0}\\ {\displaystyle\qquad\frac{\partial E}{\partial t}+\nabla\cdot((E+p)\pmb{U})=0,}\end{array}
+$$  
+
+where $\rho^{f}$ denotes the fluid density, and $E$ represents the total energy. The data is generated in the geometric of structured mesh with resolution of $200\times50$ . The locations of these mesh points are adopted as inputs. And the Mach number of each mesh point is the output.  
+
+## B.3. Darcy Flow  
+
+Darcy. The Darcy's law describes the flow of fluid through a porous medium, for example, water goes through sand. We use the Darcy dataset proposed in (Li et al., 2021), where 2-D Darcy flow equations in a unit box are formulized as:  
+
+$$
+\begin{array}{r}{-\nabla\cdot(a\nabla u)=f}\\ {u|_{x\in\partial(0,1)^{2}}=0,}\end{array}
+$$  
+
+where $a\in\mathbb{R}^{+}$ is the diffusion coefficient. $f$ means the externel force, which is fixed as 1 in this dataset. This dataset takes $a$ as input, and the output is the solution $u$ . The samples in this dataset are in the regular grid with resolution as $85\times85$  
+
+![](images/274ee4de9c23069858dc9fc32a1803d8c8f02149afe8287ab33d966ab3d2135e.jpg)  
+Figure 8. Showcases on all seven benchmarks. Especially for the sub-figure (c) Plasticit, we plot the last timestamp of output $(T=20)$ 1 As for the sub-figure (g) Navier-Stokes, we plot the frames at $T=18$ and $T=20$ to present the model performance over time.  
+
+# C. More Showcases  
+
+As a complement to Figure 4, we present showcases for all benchmarks in Figure 8 and also plot the coordinate-wise prediction error for comparison. As demonstrated in above showcases, LSM achieves a remarkable prediction performance in extensive tasks. By investigating each case, we can obtain the following observations:  
+
+Performance on the boundary. From Figure 8(a)(b)(c)(f), we can find that LSM significantly surpasses other baselines on the boundary of different geometrics, demonstrating the model capability in learning physical constraints. Performance in time-dependent tasks. As shown in Figure 8(g), LSM can precisely predict the future velocity for the fluid in the Navier-Stokes benchmark. Especially, the performances of other methods drop seriously from $T=18$ to $T=20$ , while LSM can simulate the fluid accurately even in the long-term future.  
+
+# D. Full Ablations  
+
+As a complement to Table 3 of main text, we provide the comprehensive ablation results for all seven benchmarks here From Table 6, we can observe that all the components in LSM are efective to the final performance. Besides, we also present detailed ablations on the neural spectral block in Table 7. Here are the analyses.  
+
+Table 6. Full blation results on hirrchical projectionntwork (Projection, Multiscale, Patchify) and neural sectral block (Spectral). We conduct two types of experiments: replacing our attention-based projector with other designs (rep) and removing components (w/o. Efficiency is calculated on inputs with size $256\times256$ and batch size as 1. "/' indicates the out-of-memory situation.   
+
+
+<html><body><table><tr><td colspan="2" rowspan="2">DESIGNS</td><td colspan="2">|#PARAM #MEM #TIME|</td><td rowspan="2"></td><td colspan="3">SOLID PHySICS</td><td colspan="4">FLUID PHYSICS</td></tr><tr><td>(MB)</td><td>(MB)</td><td>(S/ITER)|ELASTICITY-P ELASTICITY-G PLASTICITY NAVIER-STOKES DARCY AIRFOIL</td><td></td><td></td><td></td><td></td><td></td><td>PIPE</td></tr><tr><td rowspan="4">REP</td><td>|Conv</td><td>1.947</td><td>2.793</td><td>0.037</td><td>0.0236</td><td>0.00429</td><td>0.0029</td><td>0.1571</td><td>0.0081</td><td>0.0077 0.0052</td><td></td></tr><tr><td>AvGPOOL</td><td>1.836</td><td></td><td>1.748 0.028</td><td>0.0243</td><td>0.0413</td><td>0.0031</td><td>0.1564</td><td>0.0077 0.0072 0.0056</td><td></td><td></td></tr><tr><td>SELF-ATTN</td><td>2.002</td><td></td><td>7.188 0.064</td><td>0.0245</td><td>0.0424</td><td>/</td><td>0.1567</td><td></td><td>0.0082 0.0062 0.0056</td><td></td></tr><tr><td>PROJECTOR</td><td>1.836</td><td>2.793</td><td>0.035</td><td>0.0563</td><td>0.0419</td><td>/</td><td>0.1609</td><td></td><td>0.0080 0.0085 0.0059</td><td></td></tr><tr><td rowspan="4">w/o</td><td>MULTISCALE</td><td>0.079</td><td></td><td>1.757 0.020</td><td>0.0269</td><td>0.0479</td><td>0.0044</td><td>0.1667</td><td>0.0123 0.0097 0.0091</td><td></td><td></td></tr><tr><td>PATCHIFY</td><td>2.002</td><td></td><td>1.748 0.062</td><td>0.0545</td><td>0.0414</td><td>0.0040</td><td>0.1576</td><td></td><td>0.0068 0.0062 0.0055</td><td></td></tr><tr><td>|SPECTRAL</td><td>1.990</td><td></td><td>1.913 0.034</td><td>0.0253</td><td>0.0421</td><td>0.0034</td><td>0.1618</td><td></td><td>0.0075 0.0107 0.0053</td><td></td></tr><tr><td>OURS</td><td>2.002</td><td></td><td>1.914 0.041|</td><td>0.0218</td><td>0.0408</td><td>0.0025</td><td>0.1535</td><td></td><td>0.0065 0.0059 0.0050</td><td></td></tr></table></body></html>  
+
+Table 7. Detailed ablations on neural spectral block. MSE is recorded.   
+
+
+<html><body><table><tr><td>TYPE</td><td>|MODEL</td><td>ELASTICITY-P</td><td>DARCY</td></tr><tr><td rowspan="2"></td><td>LSM w/O NEURAL SPECTRAL BLOCK REPLACE NEURAL SPECTRAL BLOCK | LSM BUT REPLACE NEURAL SPECTRAL BLOCK WITH MLP</td><td>0.0253</td><td>0.0075</td></tr><tr><td>LSM BUT REPLACE NEURAL SPECTRAL BLOCK WITH FNOI</td><td>0.0249 0.0356</td><td>0.0075 0.0073</td></tr><tr><td>REPLACE BASIS OPERATORS</td><td>| LSM WITH POLYNOMIAL BASIS OPERATORS</td><td>0.0261</td><td>0.0073</td></tr><tr><td>FINAL VERSIONS</td><td>|LSm</td><td>0.0218</td><td>0.0065</td></tr></table></body></html>  
+
+Replace neural spectral block with other global operators. To verify advantages in learning multiple basis operators, we also conduct experiments on replacing the neural spectral block with multilayer perceptrons (MLP) and FNO (Li et al. 2021), where the later ones are global operators without basis operator decomposition design. As shown in Table 7, compared to learning basis operators, it is harder to learn a global operator, whose performance is close to removing the neural spectral block directly. It is also notable that replacing neural spectral block with FNO means applying FFT in the latent space, which is unreasonable since the latent tokens are independent. Thus, directly replacing neural spectral block with FNO damages performance seriously (Table 7), sometimes even worse than the case without neural spectral block.  
+
+Replace basis operators in neural spectral block. Note that the clasical spectral method is a general framework. which is to decompose the complex solution into several orthogonal basis functions. Thus, replacing the trigonometric approximation in LSM with other basis is also implementable. However, other basis may not achieve the nice approximation and optimization properties as the trigonometric basis functions. For example, as shown in Table 7, directly replacing trigonometric basis with polynomial basis will decrease the model performance. Thus, we would like to leave the exploration of other basis operators as the future work, including the corresponding model design and theoretical derivation.  
+
+# E. Performance Under Various Resolutions  
+
+s shown in Table 8 and 9, we also evaluate the model performance on the newly-generated Darcy and Navier-Stokes atasets with various resolutions, where we can obtain the following observations:  
+
+For the Darcy benchmark, U-Net (2015) and HT-Net (Liu et al., 2022) that are proposed based on advanced deep models U-Net and Transformer (Vaswani et al., 2017), degenerate a lot on the inputs with large resolutions, e.g. $1024\times1024$ , indicating that there exist complex mappings between input-output pairs of high-dimensional PDEs. In contrast, LSM presents a stable performance w.r.t. different inputs and consistently surpasses other baselines in all resolutions, presenting good capacity in solving high-dimensional PDEs. As for the Navier-Stokes benchmark, whose task is to predict the future 10 frames based the past 10 frames, we can find that in comparison with other baselines, LSM presents more significant advantage in higher input resolutions.  
+
+able 9. Model performance comparison on the Navier-Stokes benchmark under different resolutions. $^{**}/{}^{*}$ indicates the poor performanct   
+
+
+<html><body><table><tr><td>RESOLUTION|U-NET (2015) FNO (2021)</td><td></td><td></td><td>MWT (2021)</td><td></td><td></td><td>U-NO (2022) F-FNO (2023) HT-NET (2022)|LSM (OURS)</td><td></td></tr><tr><td>32  32</td><td>0.0059</td><td>0.0128</td><td>0.0083</td><td>0.0148</td><td>0.0103</td><td>0.0058</td><td>0.0049</td></tr><tr><td>64 x 64</td><td>0.0052</td><td>0.0067</td><td>0.0078</td><td>0.0079</td><td>0.0064</td><td>0.0046</td><td>0.0042</td></tr><tr><td>128  128</td><td>0.0054</td><td>0.0057</td><td>0.0064</td><td>0.0064</td><td>0.0050</td><td>0.0040</td><td>0.0038</td></tr><tr><td>256  256</td><td>0.0251</td><td>0.0058</td><td>0.0057</td><td>0.0064</td><td>0.0051</td><td>0.0044</td><td>0.0043</td></tr><tr><td>512  512</td><td>0.0496</td><td>0.0057</td><td>0.0066</td><td>0.0057</td><td>0.0042</td><td>0.0063</td><td>0.0039</td></tr><tr><td>1024  1024</td><td>0.0754</td><td>0.0062</td><td>0.0077</td><td>0.0058</td><td>0.0069</td><td>0.0163</td><td>0.0050</td></tr></table></body></html>  
+
+Table 8. Model performance comparison on Darcy under different resolutions.   
+
+
+<html><body><table><tr><td></td><td>RESOLUTION|U-NET (2015) FNO (2021) MWT (2021) U-NO (2022) F-FNO (2023) HT-NET (2022)|LSM (OURS)</td><td></td><td></td><td></td><td></td><td></td><td></td></tr><tr><td>64  64</td><td>0.1982</td><td>0.1556</td><td>0.1541</td><td>0.1713</td><td>0.2322</td><td>0.1847</td><td>0.1535</td></tr><tr><td>128  128</td><td>/</td><td>0.1028</td><td>0.1099</td><td>0.1068</td><td>0.1506</td><td>0.1088</td><td>0.0961</td></tr></table></body></html>  
+
+# F. Additional Experiments on Burger's Equation  
+
+As a fundamental partial differential equation for convection-diffusion processes occurring in various areas of applied mathematics, Burger's equation is widely used in modeling fluid mechanics, nonlinear acoustics and gas dynamics. Following the experiment settings in FNO (Li et al., 2021), we also test LSM in solving 1D Burger's equation. Especially, to ft the 1D input data, we need to implement the following changes to LSM and other baselines:  
+
+By conducting the up-down sampling and patchify in the 1D space, LSM can handle the 1D inputs.   
+: As for the F-FNO, we replace its factorized 2D FFT with 1D FFT.   
+: For the U-NO, we replace both 2D up-down sampling and 2D FFT with 1D versions.  
+
+From Table 10, we can find that LSM stillperforms well in this equation under various resolutions, verifying the model :apacity in solving high-dimensional PDEs.  
+
+Table 10. Model performance comparison on 1D Burger's equation.   
+
+
+<html><body><table><tr><td>RESOLUTIONE</td><td>FNO (2021)</td><td>MWT (2021)</td><td>U-NO (2022)</td><td>F-FNO (2023) | LSM (OURS)</td><td></td></tr><tr><td>256</td><td>0.00332</td><td>0.00199</td><td>0.00450</td><td>0.00414</td><td>0.00123</td></tr><tr><td>512.</td><td>0.00333</td><td>0.00185</td><td>0.00488</td><td>0.00347</td><td>0.00124</td></tr><tr><td>1024</td><td>0.00377</td><td>0.00185</td><td>0.00508</td><td>0.00319</td><td>0.00126</td></tr><tr><td>2048</td><td>0.00346</td><td>0.00186</td><td>0.00574</td><td>0.00313</td><td>0.00115</td></tr><tr><td>4096</td><td>0.00324</td><td>0.00185</td><td>0.00571</td><td>0.00314</td><td>0.00122</td></tr><tr><td>8192</td><td>0.00336</td><td>0.00178</td><td>0.00575</td><td>0.00315</td><td>0.00105</td></tr></table></body></html>  
+
+# G. Hyperparameter Sensitivity  
+
+s shown in Table 11, we test the hyperparameter sensitivity of our model by changing one hyperparameter and fixing the ther. Here are the details:  
+
+: Change the number of latent tokens $C$ and fix $N=24,K=5$ . we can find that the performance of LSM is stable w.r.t. different choices of $C$ , which may come from the equivalence of different latent tokens. : Change the number of basis operators $N$ and fix $C=4,K=5$ . Generally, larger $N$ will bring better results, while larger $N$ will also cause more computation cost and optimization problems, which explains why the model performance drops slightly at $N=40$ and $N=48$ . Note that the $N=0$ setting is equivalent to the without neural spectral block situation, where the model performance will drop seriously. : Change the number of scales $K$ and fix $C=4,N=24$ In general, adding scales $K$ will improve the model's performance. But the model with too many scales is unimplementable due to the limitation of input resolution.  
+
+Table 11. Model performances on Elasticity-G with different number of latent tokens $C$ , number of basis operators $N$ and number of scales $K$ ."/ means that the experiment is unimplementable.   
+
+
+<html><body><table><tr><td>NUMBER OF LATENT TOKENS C</td><td>0</td><td>1</td><td>2</td><td>3</td><td>4</td><td>5</td><td>6</td></tr><tr><td>MSE</td><td>/</td><td>0.0415</td><td>0.0415</td><td>0.0409</td><td>0.0408</td><td>0.0411</td><td>0.0415</td></tr><tr><td>NUMBER OF BASIS OPERATORS N</td><td>0</td><td>8</td><td>16</td><td>24</td><td>32</td><td>40</td><td>48</td></tr><tr><td>MSE</td><td>0.0433</td><td>0.0415</td><td>0.0418</td><td>0.0408</td><td>0.0406</td><td>0.0413</td><td>0.0416</td></tr><tr><td>NUMBER OF SCALES K</td><td>3</td><td>4</td><td>5</td><td>6</td><td>7</td><td>8</td><td>9</td></tr><tr><td>MSE</td><td>0.0428</td><td>0.0412</td><td>0.0408</td><td>0.0400</td><td>0.0402</td><td></td><td>-</td></tr></table></body></html>  
+
+Overall, LSM is stable to these three hyperparameters, where $C$ is robust and easy to tune in the range of 3 to 5, $N$ is robust in 24 to 40 and $K$ is stable in 5 to 7. Thus, the setting of number of latent tokens $C$ as 4, number of basis operators $N$ as 24 and number of scales $K$ as 5 can aptly trade off the efficiency and performance.  
+
+# H. Training Stability  
+
+We provide the model training curves on diffrent benchmarks in Figure 9. From Figure 9, we can observe that in addition to the consistent state-of-the-art performance in all benchmarks, LSM also presents comparable training stability w.r.t. the well-acknowledged FNO (Li et al., 2021).  
+
+Besides, we also repeat all the experiments five times, where the standard deviations of LSM performance are within 0.0001 for Elasticity-P, Elasticity-G and Plasticity, Darcy and Airfoil, and within 0.0002 for Navier-Stokes and Pipe.  
+
+![](images/845ea58a3d370e5e2e276d1595da51f2a7d59cd572f7be6fca4d81fdb6fc7825.jpg)  
+Figure 9. Model training curves, where the $\mathbf{x}$ -axis means the number of epochs and the y-axis is MSE performance in the test set  
+
+## 1. Implementation Details  
+
+All experiments are repeated five times, implemented in PyTorch (Paszke et al., 2019) and conducted on a single NVIDIA RTX 3090 24GB GPU. We have provided the training curves and standard deviations in Appendix H. For all methods, the performance at the final epoch is recorded as the final result. Here are the implementation details of the LSM model.  
+
+### 1.1. Model Configurations  
+
+Here, we present the detailed model configurations for LSM. In the beginning, we wil pad the input with zeros properly to resolve the division problem in model configurations.  
+
+Table 12. Model configurations for LSM.   
+
+
+<html><body><table><tr><td>MODEL DESIGNS</td><td>HYPERPARAMETERS</td><td>VALUES</td></tr><tr><td rowspan="4">HIERARCHICAL PROJECTION NETWORK</td><td>NUMBER OF LATENT TOKENS CI NUMBER OF SCALES K</td><td>4 5</td></tr><tr><td></td><td></td></tr><tr><td>DOWNSAMPLE RATIO r = [Dh+1|</td><td>0.5</td></tr><tr><td>CHANNELS OFACH SAE NODED dNonet} Channels OF Latent Tokens at each scale {dLamms,, diamen}</td><td>{32, 64, 128, 128, 128} {32, 64, 128, 128, 128}</td></tr><tr><td>NEURAL SPECTRAL BLOCK</td><td>PATCHES OF EACH SCALE {P1, ... , Pk} NUMBER OF BASIS OPERATORS NI</td><td>{256, 64, 16, 4, 1} 24</td></tr></table></body></html>  
+
+### 1.2. Model Architecture  
+
+In this section, we will illustrate the operations in the patchified multiscale architecture.  
+
+Downsample. Given deep features $\{\pmb{x}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}$ at the $k$ -th scale, the downsample operation is to aggregate deep features in a local region with maximum pooling and convolution operations, which can be formulized as follows:  
+
+$$
+\{\mathbf{x}^{k+1}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k+1}}=\operatorname{Conv}\Big(\operatorname{MaxPool}\big(\{\mathbf{\boldsymbol{x}}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}\big)\Big),k\mathrm{from}1\mathrm{to}(K-1).
+$$  
+
+Upsample. Given the deep feature $\{\widehat{\pmb{y}}^{k+1}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k+1}}$ $\{\widehat{\pmb{y}}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}$ at the $(k+1)$ th and $k$ th scales respectively, which have been projected from latent space back to coordinate space, the upsample process is to fuse the interpolated $k+1$ th features and the $k$ -th features with local convolution, which can be formulized as follows:  
+
+$$
+\mathsf{s}\in\mathcal{D}^{k}=\mathrm{Conv}\left(\mathrm{Concat}\left(\left[\mathsf{I n t e r p o l a t i o n}\left(\{\hat{y}^{k+1}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k+1}}\right),\{\hat{y}^{k}(\mathbf{s})\}_{\mathbf{s}\in\mathcal{D}^{k}}\right]\right)\right),k\mathrm{~from~}(K-1)\in\mathbb{R}^{3}\times\mathbb{Z}_{\mathsf{N}},
+$$  
+
+where we adopt the bilinear Interpolation $(\cdot)$ for 2D data and the trilinear Interpolation $(\cdot)$ for 3D data.  
+
+Patchify and De-Patchify. The patchify operation is to split the coordinate set into several non-overlapping local regions with an equal number of coordinates. This process of patchify at the $k$ -th scale is formulized as follows:  
+
+$$
+\{\mathcal{D}_{j}^{k}\}_{j=1}^{P_{k}}=\operatorname{Patchify}(\mathcal{D}^{k}).
+$$  
+
+And the depacthify operation is just to splice the patches in different local regions, that is ${\mathcal{D}}^{k}={\mathrm{De-Patchify}}(\{{\mathcal{D}}_{j}^{k}\}_{j=1}^{P_{k}}),$ -  
+
+### 1.3. Benchmark Construction  
+
+Time-dependent tasks. In our benchmarks, both Plasticity and Navier-Stokes are time-dependent. For the Plasticity benchmark, since is input is the boundary condition and output is the mesh displacement over time, we adopt the 3D-version LSM for Plasticity experiments, where al the convolution (Conv), max pooling (MaxPool), interpolation (Interpolation) and patchify (Patchify) operations are in the 3D space. As for the Navier-Stokes, since it i an autoregressive task, we still adopt the 2D-version LSM like other benchmarks and predict the next frame step by step. Note that the neural spectral block is applied to the independent latent tokens, hence it is unchanged for both 2D- and 3D-versions.  
+
+Baselines. We implement all the baselines based on their official code. Note that we focus on the operator-learning paradigm, thus we only adopt their model and uniformly use the L2 loss during training for fairness. Especiall, for the MWT (Gupta et al., 2021), we pad the inputs with zeros to make the input resolutions as integer power of two.  

@@ -3,18 +3,16 @@ import requests
 import time
 import arxiv
 import os, re
-import io, sys
-import concurrent.futures
+import sys
 from semanticscholar import SemanticScholar
 import json
-import traceback
-import concurrent.futures
 import fitz
 import subprocess
 import tempfile
 import matplotlib
 import ast
 from pathlib import Path
+
 
 def is_valid_pdf(pdf_path):
     try:
@@ -106,14 +104,13 @@ class ArxivSearch:
             except Exception as e:
                 retry_count += 1
                 if retry_count < max_retries:
-                    # 递增延时
                     time.sleep(2 * retry_count)
                     continue
                 
         return None
 
     def get_arxiv_id_by_title(self, paper_title):
-        client = arxiv.Client()  # 显式创建Client实例
+        client = arxiv.Client()
         search = arxiv.Search(
             query=f'ti:"{paper_title}"',
             max_results=1,
@@ -121,7 +118,7 @@ class ArxivSearch:
         )
         try:
             result = next(client.results(search))
-            return result.entry_id.split('/')[-1]  # 返回arXiv ID（如"1706.03762v7"）
+            return result.entry_id.split('/')[-1]
         except (StopIteration, Exception) as e:
             print(f"搜索失败: {e}")
             return None
@@ -157,18 +154,6 @@ class ArxivSearch:
 
         return pdf_text
 
-import io
-import sys
-import traceback
-import concurrent.futures
-
-import io
-import sys
-import traceback
-import multiprocessing
-import io
-import sys
-import traceback
 
 
 def execute_code(code_str, timeout=120, MAX_LEN=100000):
@@ -308,7 +293,7 @@ def get_repo_structure(repo_url, token=None):
         "files": all_files
     }
 
-def save_results(result, output_dir='code_repo', index=1):
+def save_results(result, output_dir='code_repo', index=None):
     os.makedirs(output_dir, exist_ok=True)
     repo_path = os.path.join(output_dir, f'repo_content_{index}.json')
     with open(repo_path, 'w', encoding='utf-8') as f:
