@@ -9,7 +9,7 @@ This is the official repo of AutoReproduce and ReproduceBench.
 ![main](autorp.png)
 
 ## AutoReproduce
-We are currently organizing the code.
+We are currently organizing the code and adding more content form automation. The current code is just a demo. 
 ### Quick Start
 ```
 export OPENAI_API_KEY="<OPENAI_API_KEY>"
@@ -18,12 +18,22 @@ export BASE_URL="<BASE_URL>" #If necessary
 python reproduce.py #Default setting
 ```
 
-For reproduce certain paper, the paper content should be downloaded (We are currently organizing the use of [Mineru](https://huggingface.co/spaces/opendatalab/MinerU) for automation.).
+### Specify Reproduce 
+For reproduce the paper you want, the paper content should be downloaded (We are currently organizing the use of [Mineru](https://huggingface.co/spaces/opendatalab/MinerU) for automation.).
 
 If the data cannot be obtained directly, please download the data in advance and modify the instruction to specify the path. 
 ```
 python reproduce.py --paper-path xxx --dataloader-path xxx
 ```
+
+### TODO
+Currently, for the default setting the paper lineage is not employed. Downloading the code from GitHub is limited.
+
+We recommand utilizing your customized github token and run the following commands before reproduction.
+```
+export GITHUB_TOKEN="<GITHUB_TOKEN>"
+```
+
 
 ## ReproduceBench
 ### Download Datasets

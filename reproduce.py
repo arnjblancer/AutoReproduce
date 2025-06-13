@@ -454,7 +454,7 @@ class AutoReproduce:
                                     repo_code = json.load(f)
                             else:
                                 print('Downloadin from Github. This might take a few minutes. ...')
-                                repo_code = get_repo_structure(corr_link[0][1])
+                                repo_code = get_repo_structure(corr_link[0][1], token=os.environ["GITHUB_TOKEN"])
                                 save_results(repo_code, output_dir='code_repo', index=related_)
                             self.researchagent.add_review(arxiv_paper, review_content)
                             repo_code = convert_json_to_string(repo_code)
