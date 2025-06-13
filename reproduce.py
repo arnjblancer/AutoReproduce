@@ -589,7 +589,7 @@ if __name__ == "__main__":
         instruction = INSTRUCTION
     else:
         ## TBD need to define
-        arxiv_id = ''
+        arxiv_id = args.arxiv_id
         task = ''
         title = ''
         instruction = args.instructions

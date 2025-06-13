@@ -15,7 +15,14 @@ We are currently organizing the code.
 export OPENAI_API_KEY="<OPENAI_API_KEY>"
 export BASE_URL="<BASE_URL>" #If necessary
 
-bash scripts/reproduce.sh
+python reproduce.py #Default setting
+```
+
+For reproduce certain paper, the paper content should be downloaded (We are currently organizing the use of [Mineru](https://huggingface.co/spaces/opendatalab/MinerU) for automation.).
+
+If the data cannot be obtained directly, please download the data in advance and modify the instruction to specify the path. 
+```
+python reproduce.py --paper-path xxx --dataloader-path xxx
 ```
 
 ## ReproduceBench
