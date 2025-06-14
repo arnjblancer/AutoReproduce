@@ -18,8 +18,8 @@ export BASE_URL="<BASE_URL>" #If necessary
 python reproduce.py #Default setting
 ```
 
-### Specify Reproduce 
-For reproduce the paper you want, the paper content should be downloaded (We are currently organizing the use of [Mineru](https://huggingface.co/spaces/opendatalab/MinerU) for automation.).
+### Customized Reproduce 
+For reproduce the paper you want, the paper content should be downloaded (We are currently organizing the use of [Mineru](https://huggingface.co/spaces/opendatalab/MinerU) for automation).
 
 If the data cannot be obtained directly, please download the data in advance and modify the instruction to specify the path. 
 ```
@@ -27,9 +27,7 @@ python reproduce.py --paper-path xxx --dataloader-path xxx
 ```
 
 ### TODO
-Currently, for the default setting the paper lineage is not employed. Downloading the code from GitHub is limited.
-
-We recommand utilizing your customized github token and run the following commands before reproduction.
+Currently, for the default setting the paper lineage is not employed. Downloading the code from GitHub is limited. We recommand utilizing your customized github token and run the following commands before reproduction.
 ```
 export GITHUB_TOKEN="<GITHUB_TOKEN>"
 ```
@@ -48,10 +46,11 @@ All the evaluation code are under ```evaluation```. The current code is not well
 ```
 # First summarize the key points of the paper.
 python evaluation/summarize_points.py
+
 # Then run the following files to calculate align-score.
-python evaluation/eval_high.py
-python evaluation/eval_low.py
-python evaluation/eval_mixed.py
+python evaluation/eval_high.py  # High-level score
+python evaluation/eval_low.py   # Low-level score
+python evaluation/eval_mixed.py # Mixed-level score
 ```
 
 ## Contact
