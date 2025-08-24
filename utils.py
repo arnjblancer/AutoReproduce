@@ -71,8 +71,17 @@ def save_to_file(location, filename, data):
     except Exception as e:
         print(f"Error saving file {filename}: {e}")
 
-def clip_tokens(messages, model="gpt-4", max_tokens=100000):
-    enc = tiktoken.encoding_for_model(model)
+def clip_tokens(messages, model="gpt-4", max_tokens=200000):
+    """Clip a list of messages so total tokens do not exceed ``max_tokens``.
+
+    The default limit (200k) matches the context window of GPT-5 models.
+    """
+    if model in ["o1-mini", "claude-3-5-sonnet", "o3-mini"]:
+        enc = tiktoken.encoding_for_model("gpt-4o")
+    elif model in ["deepseek-chat", "deepseek-r1"]:
+        enc = tiktoken.encoding_for_model("cl100k_base")
+    else:
+        enc = tiktoken.encoding_for_model(model)
     total_tokens = sum([len(enc.encode(message["content"])) for message in messages])
 
     if total_tokens <= max_tokens:
