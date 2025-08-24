@@ -71,50 +71,19 @@ def save_to_file(location, filename, data):
     except Exception as e:
         print(f"Error saving file {filename}: {e}")
 
-def clip_tokens(messages, model="gpt-4", max_tokens=200000):
-    """Clip a list of messages so total tokens do not exceed ``max_tokens``.
-
-    The default limit (200k) matches the context window of GPT-5 models.
-    """
-    if model in ["o1-mini", "claude-3-5-sonnet", "o3-mini"]:
-        enc = tiktoken.encoding_for_model("gpt-4o")
-    elif model in ["deepseek-chat", "deepseek-r1"]:
-        enc = tiktoken.encoding_for_model("cl100k_base")
-    else:
-        enc = tiktoken.encoding_for_model(model)
-    total_tokens = sum([len(enc.encode(message["content"])) for message in messages])
-
-    if total_tokens <= max_tokens:
-        return messages  # No need to clip if under the limit
-
-    # Start removing tokens from the beginning
-    tokenized_messages = []
-    for message in messages:
-        tokenized_content = enc.encode(message["content"])
-        tokenized_messages.append({"role": message["role"], "content": tokenized_content})
-
-    # Flatten all tokens
-    all_tokens = [token for message in tokenized_messages for token in message["content"]]
-
-    # Remove tokens from the beginning
-    clipped_tokens = all_tokens[total_tokens - max_tokens:]
-
-    # Rebuild the clipped messages
-    clipped_messages = []
-    current_idx = 0
-    for message in tokenized_messages:
-        message_token_count = len(message["content"])
-        if current_idx + message_token_count > len(clipped_tokens):
-            clipped_message_content = clipped_tokens[current_idx:]
-            clipped_message = enc.decode(clipped_message_content)
-            clipped_messages.append({"role": message["role"], "content": clipped_message})
+def clip_tokens(messages, model="gpt-4", max_tokens=100000):
+    """Clip messages so the total token count does not exceed ``max_tokens``."""
+    enc = tiktoken.encoding_for_model(model)
+    total_tokens = 0
+    clipped = []
+    # Keep the most recent messages within the token budget
+    for message in reversed(messages):
+        tokens = enc.encode(message["content"])
+        total_tokens += len(tokens)
+        if total_tokens > max_tokens:
             break
-        else:
-            clipped_message_content = clipped_tokens[current_idx:current_idx + message_token_count]
-            clipped_message = enc.decode(clipped_message_content)
-            clipped_messages.append({"role": message["role"], "content": clipped_message})
-            current_idx += message_token_count
-    return clipped_messages
+        clipped.append(message)
+    return list(reversed(clipped))
 
 def extract_prompt(text, word):
     code_block_pattern = rf"```{word}(.*?)```"

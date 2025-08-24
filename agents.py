@@ -23,8 +23,6 @@ class BaseAgent:
         self.paper_summary = str()
         self.data_summary = str()
         self.max_hist_len = 5
-        # limit on history tokens to stay within model context window
-        self.max_history_tokens = 180000
 
     def set_model_backbone(self, model):
         self.model = model
@@ -40,9 +38,7 @@ class BaseAgent:
 
     def inference(self, instruction, phase, step, feedback="", info=None, image=None, temp=None, use_command=True):
         # context = self.context(phase)
-        history_messages = [{"role": "user", "content": _[1]} for _ in self.history]
-        history_messages = clip_tokens(history_messages, model=self.model, max_tokens=self.max_history_tokens)
-        history_str = "\n".join([m["content"] for m in history_messages])
+        history_str = "\n".join([_[1] for _ in self.history])
         phase_notes = [_note["note"] for _note in self.notes if phase in _note["phases"]]
         notes_str = f"Notes for the task objective: {phase_notes}\n" if phase_notes else ""
         if use_command == True:
