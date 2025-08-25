@@ -1,0 +1,3011 @@
+Expert Systems With Applications 289 (2025) 128297
+
+Contents lists available at ScienceDirect
+
+Expert Systems With Applications
+journal homepage: www.elsevier.com/locate/eswa
+
+Enhancing trading strategies by combining incremental reinforcement
+learning and self-supervised prediction
+Chujin Zhou
+a
+
+a , Yuling Huang
+
+b , Yuting Kong
+
+c , Xiaoping Lu
+
+a,∗
+
+School of Computer Science and Engineering, Macau University of Science and Technology, Macao, China
+
+b School of Computer Science and Software, Zhaoqing University, Zhaoqing Guangdong, China
+c
+
+School of Computers, Guangdong University of Science and Technology, Dongguan Guangdong, China
+
+a r t i c l e
+
+i n f o
+
+Keywords:
+Deep reinforcement learning
+Self-supervised learning
+Incremental learning
+Algorithmic trading
+
+a b s t r a c t
+Incremental learning provides critical adaptability in dynamic environments, enabling models to continuously
+adjust with new data to improve prediction accuracy. This adaptability is especially valuable in volatile ﬁnancial
+markets, where incremental learning can help model better capture the emerging patterns of time series data.
+On the other hand, self-supervised learning gained signiﬁcant attention during the past few years due to its
+ability to exploit abundant unlabeled data to uncover complex structures and temporal dependencies, improving
+model generalization and pattern detection, which can provide a more comprehensive understanding of data
+structures. In this case, it gradually become a powerful tool in the ﬁeld of time series analysis, especially in
+ﬁnancial domain. In parallel, deep reinforcement learning (DRL) has shown great potential in decision-making
+tasks, particularly in ﬁnancial strategy optimization. However, most DRL approaches in ﬁnance rely solely on
+raw market data, limiting the model’s ability to extract key insights and often ignoring future trends essential
+for proﬁtable trading. To address the aforementioned challenge appeared in DRL domain, Incremental Forecast
+Fusion Deep Reinforcement Learning (IFF-DRL), an innovative framework that combines incremental learning
+and self-supervised learning with DRL for ﬁnancial trading is proposed, for accurately and continually optimizing
+and improving trading strategies. In this paper, AutoConNet, as a self-supervised learning method, is incorporated
+to forecast future OHLCV (Open, High, Low, Close, and Volume) data based on observed values. During testing,
+incremental learning dynamically reﬁnes the predictive model to stay aligned with market trends. By utilizing
+incremental learning algorithms, the self-supervised time series prediction network, AutoConNet, achieved an
+average reduction of 5.93 % in MSE error across six datasets during the testing phase. The predicted OHLCV
+is combined with actual observed OHLCV to generate “weekly data”, forming the state space termed “daily &
+weekly data” in reinforcement learning. Experiments conducted on six datasets show that the proposed IFFDRL signiﬁcantly improves trading performance, delivering an annualized return of 103.19 % on the HSI index.
+By combining incremental learning with reinforcement learning, IFF-DRL enables trading agents to adapt more
+eﬀectively in fast-paced markets, capturing proﬁt opportunities and oﬀering a more responsive, future-oriented
+approach in ﬁnancial decision-making. Code of this research can be found in https://github.com/AndyZCJ/
+IFF-DRL-Inference.
+
+1. Introduction
+Accurately predicting and making timely decisions in dynamic, highstakes environments like ﬁnancial markets has long been a central challenge in artiﬁcial intelligence. While recent advancements in ﬁnancial
+time series modeling have achieved some success in capturing market
+
+patterns (Wang et al., 2024; Weng, Ahmed, & Megahed, 2017; Weng,
+Lu, Wang, Megahed, & Martinez, 2018), these models often fail to respond eﬀectively to rapid and abrupt market changes, leading to suboptimal trading outcomes. A key limitation of traditional models lies
+in their oﬄine training on historical data, which prevents them from
+adapting in real time as new data becomes available. This constraint has
+
+Abbreviations: RL, Reinforcement Learning; DRL, Reinforcement Learning; DRL, Deep Reinforcement Learning; DQN, Deep Q-Network; DDQN, Double Deep
+Q-Network; PPO, Proximal Policy Optimization; A2C, Advantage Actor-Critic; CR, Cumulative Return; AR, Annualized Return; SR, Sharpe Ratio; MDD, Maximum
+Drawdown; B&H, Buy and Hold; S&H, Sell and Hold; MR, Mean Reversion with Moving Averages; TF, Trend Following with Moving Averages.
+∗ Corresponding author.
+E-mail addresses: 3220002751@student.must.edu.mo (C. Zhou), huangyuling@zqu.edu.cn (Y. Huang), kongyuting@gdust.edu.cn (Y. Kong), xplu@must.edu.mo
+(X. Lu).
+https://doi.org/10.1016/j.eswa.2025.128297
+Received 25 November 2024; Received in revised form 14 January 2025; Accepted 22 May 2025
+Available online 3 June 2025
+0957-4174/© 2025 Elsevier Ltd. All rights are reserved, including those for text and data mining, AI training, and similar technologies.
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+motivated the exploration of incremental learning as a promising approach for dynamic data prediction (Li & Dai, 2019; Li, Dai, & Ye, 2019;
+Melgar-García, Gutiérrez-Avilés, Rubio-Escudero, & Troncoso, 2023). In
+ﬁnancial markets, incremental learning allows continuous model updates as new data arrives, enabling models to quickly adapt to evolving
+data patterns and improve prediction accuracy without retraining from
+scratch.
+Reinforcement Learning (RL) has gained considerable attention due
+to its capacity to optimize decision-making in uncertain, dynamic environments, including gaming (Kaiser et al., 2019; Lample & Chaplot,
+2017; Zhou, Subagdja, Tan, & Ong, 2021b), ﬁne-tuning of large language models (Achiam et al., 2023; Zhao et al., 2023), and notably, algorithmic trading (Huang, Wan, Zhang, & Lu, 2024a; Huang, Zhou, Cui,
+& Lu, 2024c). The dynamic and unpredictable nature of ﬁnancial markets makes them particularly suitable for RL applications, as RL agents
+can iteratively learn and improve trading strategies based on continuous
+feedback from the market. However, despite the development of robust
+algorithms and frameworks in applying RL methods within the ﬁnancial domain, notable shortcomings persist, particularly in data handling.
+Speciﬁcally, a signiﬁcant portion of existing work relies solely on raw
+market price data, such as daily Open, High, Low, and Close prices, as
+well as trading Volume (OHLCV). Some studies even use only the closing price as the model input (Chen & Gao, 2019; Li, Ni, & Chang, 2020).
+This reliance on static or oﬄine data limits RL models’ ability to capture
+rapid market shifts, which are often essential to seizing proﬁtable trading opportunities. Although recent eﬀorts have attempted to increase
+data diversity by incorporating additional indicators, such as technical
+signals or social media sentiment (Friedman & Fontaine, 2018; Yang,
+Liu, Zhong, & Walid, 2020), this approach introduces latency, as these
+indicators are generated after the fact and fail to capture immediate
+market changes.
+Moreover, most RL models rely primarily on historical price movements, often neglecting the potential impact of external factors such as
+political events, wars, or international relations. These factors can lead
+to sudden and new market shifts, making trading decisions based solely
+on historical data risky, as it may result in missed opportunities or substantial losses. Consequently, there is a pressing need for models that
+not only learn from historical data but also adapt to evolving market
+conditions and external inﬂuences.
+To address these challenges, this paper introduces a hybrid reinforcement learning framework that combines incremental learning
+with Self-Supervised Learning (SSL) for enhanced ﬁnancial decisionmaking. Incremental learning enables the model to continuously update as new data arrives, adapting to evolving market trends without
+retraining from scratch, which is crucial in ﬁnancial markets where
+rapid adaptation is essential. By integrating incremental learning, the
+model can maintain performance over time, eﬀectively handling nonstationary data distributions and mitigating the eﬀects of concept drift
+(Li & Dai, 2019; Li et al., 2019; Melgar-García et al., 2023). Selfsupervised learning leverages large amounts of unlabeled data abundant in ﬁnancial markets. SSL creates auxiliary tasks that uncover complex structures and temporal dependencies within the data without requiring manual labels, enhancing the model’s ability to generalize and
+detect subtle shifts in patterns. Additionally, SSL is eﬀective in producing robust predictions, even in the presence of market noise and
+volatility.
+In our framework, we integrate a self-supervised time-series prediction network with the classical incremental learning algorithm Elastic
+Weight Consolidation (EWC) (Kirkpatrick et al., 2017) within a deep reinforcement learning architecture. The self-supervised network predicts
+stock price movements over the next 𝑁 days, enabling the RL agent to
+anticipate future price changes. To capture both daily ﬂuctuations and
+macro-level patterns, the predicted stock prices are combined with observed prices to generate weekly data. This weekly data is then concatenated with daily data, forming what we term “daily & weekly data.” This
+combined dataset provides the RL agent with a nuanced view of market
+
+trends across diﬀerent time frames, enhancing its ability to make timely,
+data-driven trading decisions.
+In summary, by integrating incremental learning and self-supervised
+learning into the reinforcement learning framework, the proposed approach addresses the limitations of existing ﬁnancial RL models. Incremental learning allows the model to swiftly adapt to new data, essential for dynamic environments like ﬁnancial markets. Self-supervised
+learning leverages the vast amounts of unlabeled data to predict future
+market movements, enabling the RL agent to anticipate potential future
+changes rather than relying solely on historical data. Together, these
+approaches enhance the RL agent’s ability to make more informed and
+proﬁtable trading decisions in volatile and unpredictable markets.
+The main contributions of this paper is listed as follows:
+•
+
+Proposing the Incremental Forecast Fusion Deep Reinforcement
+Learning (IFF-DRL) in single-asset trading, which combining the concept of incremental learning and self-supervised learning to improve
+trading performance.
+• Developing a new types of data, namely daily & weekly data, that
+are diﬀerent from traditional OHLCV data, which can help reinforcement learning agent see a more macro-level stock price patterns.
+• Incorporating self-supervised time-series prediction network AutoConNet to predict future ﬁnancial price data, which largely improve
+the accuracy of predicting price trend and the ability of capturing
+the pattern.
+• Using incremental learning algorithm—online EWC during testing
+phase, which greatly improve the prediction accuracy of AutoConNet, and thus enhancing the trading performance of reinforcement
+learning agent.
+• The proposed framework was evaluated using three reinforcement
+learning algorithms: DDQN, A2C, and PPO. Experiments conducted
+on six widely-used datasets, encompassing indices such as DJI,
+FCHI, SP500, KS11, and N225, demonstrate that the framework consistently outperforms various traditional and Deep Reinforcement
+Learning (DRL)-based methods. These results underscore the framework’s potential to optimize stock trading strategies and enhance the
+reliability of algorithmic trading by eﬀectively combining reinforcement learning with forecasts of future stock price movements.
+The structure of this paper is as follows. Section 2 reviews relevant
+prior studies on the topic. In Section 3, the proposed method is described
+in detail. Section 4 presents and analyzes the experimental results. The
+advantages and limitations of the current research are discussed in Section 5. Finally, Section 6 summarizes the key ﬁndings and outlines directions for future work.
+2. Related work
+Financial time series modeling, as an important application area of
+time series analysis, has already been deeply explored and applied in
+the ﬁnancial sector.
+2.1. Incremental learning
+Incremental learning involves continuously learning new knowledge
+from new samples while retaining the already learned knowledge. By
+adjusting model parameters to integrate new and old data, it simulates the continuous learning mode of humans without the need for
+a complete retraining, and has shown distinct advantages in the ﬁeld
+of time series analysis. Incremental learning is particularly suitable for
+handling large-scale, high-dimensional, and dynamically changing time
+series data. It can eﬀectively reduce the time cost required for model updates and signiﬁcantly alleviate the problem of catastrophic forgetting.
+The core of incremental learning lies in maintaining the model’s memory of old knowledge while learning new knowledge when new data is
+introduced, similar to the “stability-plasticity dilemma” in the nervous
+2
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+system (Grossberg, 2012), which seeks a balance between stability and
+plasticity.
+Prior to the rise of deep learning technologies, there had already been
+research on incremental learning. However, these studies were mostly
+conﬁned to handling incremental learning between old and new tasks,
+and were primarily based on traditional machine learning models, making it diﬃcult to cope with the challenges of long-term, large-scale data
+in modern data streams. With the rapid development of deep learning,
+particularly Deep Neural Networks (DNNs), their powerful representational capabilities have made deep learning-based incremental learning
+a potent tool for addressing these issues. The emergence of Vision Transformers (ViT) and pretrained models has turned deep learning-based
+incremental learning into a research hotspot, providing new solutions
+for handling complex visual tasks and data streams. Additionally, Ehret
+and colleagues demonstrated the eﬀectiveness and potential of incremental learning in processing time series data by evaluating Recurrent
+Neural Networks (RNNs) on time series datasets (Ehret et al., 2020).
+Furthermore, the incremental approach’s capability to signiﬁcantly alleviate catastrophic forgetting in time series data has been validated in
+tasks such as Stroke-MNIST (Gulcehre, Chandar, & Bengio, 2017) and
+AudioSet (Gemmeke et al., 2017).
+Currently, the application of incremental learning in time series analysis exempliﬁes its advantages in handling large-scale dynamic data,
+quickly adapting to new data, and alleviating catastrophic forgetting.
+With the continuous advancement of deep learning technologies, particularly the rise of self-supervised models, deep learning-based incremental learning will showcase its immense potential and value in even
+more domains.
+
+aligns with the global autocorrelation measured in the data space. This
+approach helps the model learn long-term representations and enhances
+its ability to predict long-term changes.
+By combining contrastive learning and other SSL techniques, the
+model’s discriminative ability and adaptability to new data can be
+further enhanced (Jing et al., 2024). This strategy not only improves
+the model’s predictive performance but also provides new insights and
+methods for time series analysis. As SSL has already made signiﬁcant
+progress in the ﬁeld of time series analysis and ﬁnance, further exploration of the integration of SSL with other techniques and optimization
+strategies in diﬀerent application scenarios is warranted to drive continuous development in time series analysis and the ﬁnancial domain.
+2.3. Deep reinforcement learning in algorithmic trading
+Algorithmic trading is a method of executing buy and sell orders automatically using computer programs and mathematical models. This
+type of trading determines the timing, price, and quantity of orders
+based on predeﬁned trading strategies and algorithms, thereby avoiding
+human interference and improving eﬃciency and accuracy. The rise of
+algorithmic trading has dramatically transformed the landscape of ﬁnancial markets, with its eﬃciency and speed enabling large-scale trading (Gupta, Singh, Kumar et al., 2022). Machine learning, as a core tool
+in this ﬁeld, optimizes market eﬃciency and aids in generating excess
+returns by deeply mining complex relationships and patterns within historical data.
+In recent years, with the continuous advancement of machine learning technology and the massive increase in ﬁnancial data, the design
+of algorithmic trading strategies has become more complex and precise. For example, in ﬁnancial markets, the application of deep learning
+in trading algorithms has signiﬁcantly improved the accuracy of stock
+return predictions. Complex neural networks structures capture market patterns and trends that are diﬃcult to identify using traditional
+methods, and they process large amounts of data to extract key features
+(Wang & Yan, 2021). Compared to traditional methods, deep learning
+demonstrates higher predictive stability and accuracy (Vijayarani, Suganya, & Jeevitha, 2020; Wu et al., 2020). At the same time, reinforcement learning dynamically adjusts strategies to maximize returns, creating more ﬂexible and adaptive trading strategies that eﬀectively respond
+to market ﬂuctuations, capture trading opportunities, and reduce risk
+(Ghania, Awaisa, & Muzammula, 2019). Deep reinforcement learning,
+by combining the feature extraction capabilities of deep learning with
+the strategy optimization capabilities of reinforcement learning, better
+adapts to market complexities and nonlinear relationships, enhancing
+the stability and proﬁtability of trading (Yang et al., 2020).
+Recent research has revealed signiﬁcant advancements and integration trends of Deep Reinforcement Learning (DRL) in solving more
+generalized algorithmic trading problems. For instance, the introduction of Probabilistic Knowledge Transfer (PKT) to optimize the distillation method of DRL agents has successfully improved the training process of these agents, signiﬁcantly enhancing training stability
+(Moustakidis, Passalis, & Tefas, 2024). Additionally, an innovative algorithm based on the Deep Q-Network (DQN) algorithm utilizes a simpliﬁed reward function with delayed feedback mechanisms to promote
+model reinforcement learning, simplifying the decision-making process
+and providing a more ﬂexible and adaptive reward mechanism. This,
+in turn, drives improvements in returns management and risk control
+(de Azevedo Takara, Santos, Mariani, & dos Santos Coelho, 2024). In
+terms of model integration, a feature extractor based on GraphSAGE
+has been integrated into the PPO agents’ architecture. This integration
+strategy signiﬁcantly boosts the model’s ability to recognize key features of stock market data, thereby enhancing its performance in portfolio optimization tasks. Its integration advantage has been eﬀectively
+validated across diﬀerent market scenarios (Sun, Wei, & Yang, 2024).
+Furthermore, the DRL framework has innovatively incorporated a bidirectional Long Short-Term Memory (BiLSTM) network combined with
+
+2.2. Self-Supervised learning
+Self-supervised learning (SSL) is a method that leverages unlabeled
+data by designing auxiliary tasks to mine data features for training models. It has gradually become a powerful tool in the ﬁeld of time series
+analysis. By utilizing unlabeled time series data to train models, SSL
+signiﬁcantly reduces the dependency on costly labeled data. Its core advantage lies in its ability to capture the intrinsic structure and patterns
+of time series data, thereby helping models better understand and predict future trends. For example, SSL models based on Transformers, such
+as Pyraformer (Liu et al., 2021) and Informer (Zhou et al., 2021a), have
+successfully applied SSL to time series forecasting tasks by introducing
+innovative methods like sparse attention mechanisms and time-aware
+decomposition strategies.
+To more deeply explore the complex structure of time series, MICN
+(Wang et al., 2023) and CoST (Woo, Liu, Sahoo, Kumar, & Hoi, 2022)
+decompose time series into trend, seasonality, and other components,
+and perform SSL learning and prediction for these components separately. This approach, by decomposing the diﬀerent components of the
+time series, allows the model to focus more on the feature learning of
+each component, thereby improving the accuracy of predictions. Additionally, CDformer (Liu, Zhuang, Gao, & Qin, 2024) utilizes local linear
+scaling approximation (LLSA) encoding mutations, decomposes the time
+series into trend and seasonality, and achieves high-precision predictions by adding the predictions from MLP and wavelet attention mechanisms. It has shown excellent performance on datasets, demonstrating
+its potential in ﬁnancial time series forecasting and trading.
+AutoCorrelation-based Contrastive Loss Network (AutoConNet) is a
+network model designed for long-term forecasting using autocorrelation
+(Park, Gwak, Choo, & Choi, 2024). In real-world scenarios, time series
+often exhibit diﬀerent long-term and short-term variations. Long-term
+variations are challenging for models to predict because they cannot be
+captured within a typical window. AutoConNet addresses this by sampling from long time series to obtain discrete window data. It then calculates the global autocorrelation coeﬃcient for each pair of windows
+using an autocorrelation function. The model is designed with a loss
+function that ensures the similarity between window representations
+3
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+an attention mechanism. This innovative fusion further enhances the
+model’s ability to identify key features in stock market data (Huang
+et al., 2024a). Additionally, LSTM and CNN have been integrated
+into the deep reinforcement learning framework as multi-agents, eﬀectively overcoming traditional issues of value function overestimation
+and overﬁtting. Compared to single-agent reinforcement learning algorithms, this strategy shows better performance and more stable returns
+(Cheng & Sun, 2024). The multi-agent approach built on a Double Deep
+Q-Network, employing TimesNet and multi-scale convolutional neural
+networks, achieves eﬀective risk balancing through innovative integration and obtains considerable returns in complex stock market trading
+(Huang et al., 2024c). These research advancements collectively highlight the immense potential and vast prospects of DRL technology in the
+ﬁeld of ﬁnancial trading strategy optimization.
+These studies not only demonstrate the potential of DRL in algorithmic trading, but also reveal its advantages over traditional methods,
+including the ability to adapt to market changes, avoid emotional biases, and accelerate trade execution. With the continuous development
+of DRL, the research prospects in the ﬁeld of algorithmic trading are
+vast, and there is hope that it will further drive innovation and transformation in ﬁnancial markets in the future.
+
+evolves over time due to changes in investor behavior, market conditions, and external shocks. This dynamic view allows the proposed
+model to adapt to variations in market eﬃciency, enabling it to respond to unexpected events and shifting market dynamics.
+2. Considering the complexities of stock market liquidity and the relatively small scale of assets being analyzed, particularly from the
+perspective of individual investors, this paper assumes that the impact of individual buy or sell orders on market prices is negligible. As
+a result, a single trade is presumed not to have a signiﬁcant inﬂuence
+on price movements.
+3. There is no slippage in the execution of orders, meaning the market
+assets possess suﬃcient liquidity to ensure that trades are executed
+at the quoted prices without any deviation.
+3.1. Overview of the proposed method
+In this section, we present an overview of the proposed method.
+As illustrated in Fig. 1, the framework combines reinforcement learning with a self-supervised time series prediction network. The process
+begins by introducing a pre-trained self-supervised network to forecast
+OHLCV (Open, High, Low, Close, Volume) values for the next 𝑛 days,
+using past OHLCV data as input. These predictions, along with the actual observed data, form the state input to the reinforcement learning
+model. The state representation is designed with two components. The
+ﬁrst, 𝑠𝑑𝑡 , includes the observed OHLCV data at time 𝑡. The second, 𝑠𝑤
+𝑡 ,
+aggregates both observed and predicted data into weekly OHLCV summaries. Then, the 𝑠𝑑𝑡 and 𝑠𝑤
+𝑡 are concatenated to form the daily & weekly
+data called 𝑠𝑓𝑡 , which is served as the input state 𝑠 of the reinforcement
+learning algorithm. By combining these 𝑠𝑑𝑡 and 𝑠𝑤
+𝑡 , the model beneﬁts
+from both ﬁne-grained daily patterns and broader weekly trends, enhancing decision-making capabilities. In the testing phase, we employ
+the online Elastic Weight Consolidation (EWC) method to enable incremental learning within the prediction network. This approach helps the
+network retain previously learned knowledge while adapting to new
+data, ensuring consistent prediction accuracy. By maintaining the selfsupervised network’s learning capability, the overall framework demonstrates improved robustness and adaptability in dynamic environments.
+
+3. Method
+In algorithmic trading, the process of selecting and executing trading strategies can be eﬀectively modeled as a Markov Decision Process
+(MDP), making it a natural ﬁt for reinforcement learning (RL). Within
+this framework, ﬁnancial reinforcement learning agents strive to identify the optimal trading strategy by exploring and evaluating the consequences of diﬀerent actions in a dynamic trading environment. However, to thoroughly investigate the application of RL in complex ﬁnancial markets and to ensure the robustness and reliability of the results,
+it is essential to establish several key assumptions:
+1. The market operates under dynamic eﬃciency, integrating both the
+Eﬃcient Markets Hypothesis (EMH) and the Adaptive Markets Hypothesis (AMH). EMH assumes that market prices reﬂect all available information, while AMH acknowledges that market eﬃciency
+
+Fig. 1. The structure of the proposed method.
+4
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+3.2. Problem formulation
+
+return-based reward function that balances short-term and long-term returns over a ﬂexible time horizon. By considering the maximum returns
+from various positions and incorporating an adaptable time window, the
+function eﬀectively captures trends from both short-term and long-term
+perspectives, ultimately aiming to maximize overall returns. Notably,
+the ﬂexibility of this reward function allows for ﬁne-tuning between
+short-term and long-term objectives by adjusting the time horizon parameter 𝑚, making it adaptable to the unique characteristics of diﬀerent
+stocks. Additionally, the function is designed to emphasize information
+relevant to the agent’s positions. The mathematical formulation of the
+proposed reward function is provided in Eqs. (5) to (7).
+{
+POS𝑡 ∗ maxRatio, maxRatio > 0 or maxRatio + minRatio > 0,
+𝑅𝑡 =
+POS𝑡 ∗ minRatio, minRatio < 0 or maxRatio + minRatio < 0.
+
+The state provides a representation of the environment at time 𝑡,
+oﬀering the agent the necessary information to make informed decisions. As mentioned earlier, the training data is organized into daily
+and weekly datasets. The daily data consists of observed OHLCV (Open,
+High, Low, Close, Volume) values, while the weekly data is generated by
+combining predicted prices with observed ones. In this context, the state
+can be categorized into daily state and weekly state. The daily state, denoted as 𝑠𝑑𝑡 , is a collection of features including the opening price, high
+price, low price, closing price, and trading volume (OHLCV) over the
+past 𝑛 days. The daily state can be denoted as:
+𝑠𝑑𝑡 = {𝑂𝑛𝑑 , 𝐻𝑛𝑑 , 𝐿𝑑𝑛 , 𝐶𝑛𝑑 , 𝑉𝑛𝑑 }𝑡 .
+
+(1)
+
+Similarly, weekly state can be represented as:
+
+(5)
+
+𝑤
+𝑤
+𝑤
+𝑤
+𝑤
+𝑠𝑤
+𝑡 = {𝑂𝑛 , 𝐻𝑛 , 𝐿𝑛 , 𝐶𝑛 , 𝑉𝑛 }𝑡 ,
+
+(2)
+
+where
+
+𝑤
+𝑤
+where 𝑂𝑛𝑤 , 𝐻𝑛𝑤 , 𝐿𝑤
+𝑛 , 𝐶𝑛 , 𝑉𝑛 are the stock market prices for the OHLCV
+data in the weekly period of observed days and predicted days. The
+complete state at time 𝑡 is the concatenation of daily state and weekly
+state, therefore, the complete state 𝑠𝑓𝑡 can be denoted as:
+
+𝑠𝑓𝑡 = {𝑠𝑑𝑡 , 𝑠𝑤
+𝑡 }.
+
+maxRatio =
+{
+minRatio =
+
+(3)
+
+where 𝑟𝑡+𝑖 =
+
+3.2.1. Action
+At each time step 𝑡, given a state 𝑠𝑓𝑡 , the agent selects and performs
+an action 𝑎𝑡 guided by the RL policy. In this study, which focus on algorithmic trading, the agent has only three actions, namely buy, hold,
+and sell. The computation of actions can be represented as:
+⎧−1, if 𝜋(𝑎𝑡 |𝑠𝑓𝑡 ) = Sell;
+⎪
+𝑎𝑡 = ⎨0,
+if 𝜋(𝑎𝑡 |𝑠𝑓𝑡 ) = Hold;
+⎪
+if 𝜋(𝑎𝑡 |𝑠𝑓𝑡 ) = Buy,
+⎩1,
+
+Description
+
+0
+0
+0
+1
+1
+1
+−1
+−1
+−1
+
+0
+1
+−1
+0
+1
+−1
+0
+1
+−1
+
+0
+1
+−1
+0
+0
+−1
+0
+1
+0
+
+0
+1
+−1
+1
+1
+0
+−1
+0
+−1
+
+Hold the cash.
+Open a long position.
+Open a short position.
+Hold the long position.
+Hold the long position.
+Close the long position.
+Hold the short position.
+Close the short position.
+Hold the short position.
+
+min(𝑟𝑡+1 , 𝑟𝑡+2 , ⋯ , 𝑟𝑡+𝑚 ),
+
+if 𝑟𝑡+𝑖 < 0,
+
+0,
+
+otherwise.
+
+(6)
+
+(7)
+
+𝑝𝑡+𝑖 −𝑝𝑡
+∗ 100.
+𝑝𝑡
+
+1∑
+𝑆𝑡 𝑆𝑡−ℎ ,
+𝑇 →∞ 𝑇
+𝑡=1
+𝑇
+
+(8)
+
+where 𝑆 = (𝑠1 , …, 𝑠𝑇 ) is the entire time series, 𝑇 denotes the length of
+the observed time series, 𝑠𝑡 ∈ ℝ𝑐 is observation with 𝑐 dimensional, and
+the lag ℎ is the distance between two windows.
+By implementing a mini-batch comprised of widely separated windows through global autocorrelation, where the time distance can span
+the entire sequence length and exceed the window length, the model is
+endowed with the capability to handle long-term dependencies by establishing relations between global windows. Set a ﬁxed-length 𝑊 window on 𝑆 as 𝐷 = {𝑊𝑡 }𝑀
+. The global index sequence of 𝑊𝑡 is denoted as
+𝑡=1
+−1 . Based on the global autocorrelation, the relationship be𝑡 = {𝑡 + 𝑖}𝑊
+𝑖=0
+tween two windows is deﬁned as follows. At two diﬀerent times 𝑡1 and
+𝑡2 , for any two windows 𝑊𝑡1 and 𝑊𝑡2 each has 𝑊 observations, with
+−1 and  = {𝑡 + 𝑗}𝑊 −1 serving as the global index in
+𝑡1 = {𝑡1 + 𝑖}𝑊
+𝑡2
+2
+𝑖=0
+𝑗=0
+chronological order. The time distance matrix between each two observation windows is 𝐷 ∈ ℝ𝑊 ×𝑊 , and the time distance between elements
+is represented by 𝐷𝑖,𝑗 = |(𝑡2 + 𝑗) − (𝑡1 + 𝑖)|. The time distance between
+two windows at the same phase (𝑖.𝑒., 𝑖 = 𝑗) has the same value |𝑡1 − 𝑡2 |.
+The relationship between two windows is deﬁned using the global autocorrelation function 𝑅𝑠𝑠 (|𝑡1 − 𝑡2 |) as follows:
+
+Table 1
+Actual trading operations based on the signal and the current account position.
+New Position
+(POS𝑡 )
+
+otherwise.
+
+𝑅𝑠𝑠 (ℎ) = lim
+
+3.2.2. Reward function
+The reward function plays a critical role in the reinforcement learning framework, serving as a measure of the immediate feedback or reward an agent receives based on its actions in a speciﬁc state. In the context of algorithmic trading, this function typically reﬂects the proﬁtability or performance of the trading strategy. Building on the approach proposed by Huang, Zhou, Cui, and Lu (2024b), this paper utilizes a novel
+
+Actual
+Action (𝑎𝑡 )
+
+if 𝑟𝑡+𝑖 > 0,
+
+0,
+
+AutoConNet, as shown in Fig. 2, uses autocorrelation to identify longterm changes. For example, it samples three windows from diﬀerent
+times 𝑡1 , 𝑡2 , and 𝑡3 of an entire time series to form a batch. These form
+three possible positive pairs(i.e., due to three anchors), and for each positive pair, a global autocorrelation is calculated. The lag is the distance
+between the two windows that make up the pair. The calculated positive
+pairs are then compared for autocorrelation with the remaining pairs,
+and those with lower autocorrelation than the anchored positive pair
+are considered negative pairs. AutoConNet obtains the autocorrelation
+function 𝑅𝑠𝑠 (ℎ) from the real discrete process {𝑆𝑡 } using the following
+equation:
+
+where 𝜋(𝑎𝑡 |𝑠𝑓𝑡 ) is RL policy that computed by the reinforcement learning
+agent at time step 𝑡.
+The trading actions executed by the agent may diﬀer from the trading signals generated by the policy network. For instance, if the account
+is already holding a short position (POS𝑡 = −1), a sell signal simply indicates maintaining the existing short position. In this case, the actual
+action taken is “hold” rather than “sell.” This adjustment arises from
+trading rules that prohibit additional buying while a long position is
+held, as well as further short selling while in a short position. Table 1
+provides a detailed explanation of how actual trading operations are determined based on the combination of the current account position and
+the generated trading signals.
+
+Signal
+(𝑎∗𝑡 )
+
+max(𝑟𝑡+1 , 𝑟𝑡+2 , ⋯ , 𝑟𝑡+𝑚 ),
+
+3.3. AutoConNet for time-series prediction
+
+(4)
+
+Old Position
+(POS𝑡−1 )
+
+{
+
+𝑟(𝑡1 , 𝑡2 ) = |𝑅𝑠𝑠 (|𝑡1 − 𝑡2 |)|.
+
+(9)
+
+AutoConNet employs a custom loss function to assess the similarity between all pairs of window representations, following the global
+autocorrelation measured in the data space. It utilizes global autocorrelation 𝑅𝑠𝑠 to determine the relationships between windows. For the
+5
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Fig. 2. The structure of AutoConNet.
+
+Autocorrelation-based Contrastive Loss (𝐴𝑢𝑡𝑜𝐶𝑜𝑛 ), the input 𝑋 ∈ ℝ𝑁×𝐼 ,
+which contains 𝑁 windows, is fed into an encoder to obtain the representation 𝑣 ∈ ℝ𝑁×𝐼×𝑑 through 𝑣 = 𝐸𝑛𝑐𝑜𝑑𝑒(,  ). For ease of explanation, 𝑐 is set to 1. Here, using 𝑖 as the window index, and 𝑟(𝑖,𝑗) =
+𝑟( (𝑖) ,  (𝑗) ) represents the global correlation between two windows, the
+formula for the loss 𝐴𝑢𝑡𝑜𝐶𝑜𝑛 is calculated based on the representation
+{𝑣(𝑖) }𝑁
+with the corresponding time sequence { (𝑖) }𝑁
+as follows:
+𝑖=1
+𝑖=1
+𝐴𝑢𝑡𝑜𝐶𝑜𝑛 = −
+
+×
+
+The MA block at the head of the long-term branch smooths out shortterm ﬂuctuations, enabling the branch to focus more on long-term information. The loss function  for the redesigned architecture is formulated
+as follows:
+ = 𝑀𝑆𝐸 + 𝜆 ⋅ 𝐴𝑢𝑡𝑜𝐶𝑜𝑛 .
+
+Finally, Mean Squared Error (MSE) and AutoCon loss are combined
+with weight 𝜆 as hyperparameters to optimize the objective function .
+AutoConNet constructs weekly OHLCV data using both predicted and
+observed data as input for the reinforcement learning model. This allows
+the model to suﬃciently learn long-term representations from global information, enhancing its ability to predict long-term changes. As shown
+in Fig. 2, the AutoConNet framework.
+
+𝑁
+∑
+
+1
+1
+𝑁 𝑖=1 𝑁 − 1
+𝑁
+∑
+𝑗=1,𝑗≠𝑖
+
+𝑟(𝑖,𝑗) log ∑𝑁
+
+exp(𝑆𝑖𝑚(𝑣(𝑖) , 𝑣(𝑗) )∕𝜏)
+
+𝑘=1 𝟙[𝑘≠𝑖,𝑟(𝑖,𝑘) ⩽𝑟(𝑖,𝑗) ] exp(𝑆𝑖𝑚(𝑣
+
+(𝑖) , 𝑣(𝑘) )∕𝜏)
+
+, (10)
+
+where 𝑆𝑖𝑚(⋅, ⋅) measures the similarity between two representations,
+There are a total of 𝑁 × (𝑁 − 1) possible pairs indexed by (𝑖, 𝑗). For each
+pair (serving as an anchor pair), any pair whose global autocorrelation
+𝑟(𝑖,𝑘) is less than 𝑟(𝑖,𝑗) is considered a negative pair, designating the anchor
+pair itself as a relatively positive pair. Additionally, 𝑟(𝑖, 𝑗) is introduced
+as a weight to diﬀerentiate the positive pairs with varying degrees of
+correlation, minimizing 𝐴𝑢𝑡𝑜𝐶𝑜𝑛 .
+AutoConNet is designed with three main features to adhere to shortterm temporal locality and the global nature of long-term predictions.
+Firstly, use window normalization and denormalization to mitigate
+the issue of distribution shift brought about by the non-stationarity of
+real-world time series (Kim et al., 2021). The formula is:
+𝑛𝑜𝑟𝑚 =  − ,
+
+𝑝𝑟𝑒𝑑 = (𝑠ℎ𝑜𝑟𝑡 + 𝑙𝑜𝑛𝑔 ) + ,
+
+3.4. Online elastic weight consolidation
+Online Elastic Weight Consolidation (EWC) (Kirkpatrick et al., 2017)
+is an incremental learning algorithm that helps prevent catastrophic forgetting (French, 1999) by selectively constraining updates to the neural
+network’s parameters based on their importance to previously learned
+tasks. This is particularly useful in settings where the model must adapt
+to new data without forgetting previously acquired knowledge.
+The central idea behind EWC is to regularize the loss function to penalize large changes in important parameters. The importance of each
+parameter is measured using the Fisher Information Matrix, which captures how sensitive the model’s predictions are to changes in these parameters. The online EWC approach builds upon the traditional EWC by
+consolidating knowledge continuously across tasks or streaming data
+without explicit task boundaries. The loss function for online EWC can
+be deﬁned as:
+𝜆∑
+(𝜔) = new (𝜔) +
+Ω (𝜔 − 𝜔∗𝑖 )2 ,
+(16)
+2 𝑖 𝑖 𝑖
+
+(11)
+
+where  is the mean of the input sequence.
+Secondly, for the short-term Branch for Temporal Locality (Zeng,
+Chen, Zhang, & Xu, 2023), a linear layer is used for short-term prediction, with the formula being:
+𝑠ℎ𝑜𝑟𝑡 = 𝐿𝑖𝑛𝑒𝑎𝑟(𝑛𝑜𝑟𝑚 ).
+
+(12)
+
+where the new (𝜔) is the standard loss function on the current task
+or new data, 𝜆 is a hyperparameter controlling the trade-oﬀ between
+plasticity (adaptation to new data) and stability (retaining old knowledge), 𝜔𝑖 are the current parameters of the model, 𝜔∗𝑖 are the parameters learned from previous data or tasks, Ω𝑖 represents the importance
+of each parameter 𝜃𝑖 , computed based on the Fisher Information Matrix.
+The Fisher Information Matrix 𝐹𝑖 is used to estimate the importance
+of the parameters. For each parameter 𝜔𝑖 , its importance is deﬁned as:
+
+And for the Long-term Branch for Temporal Globality, the AutoCon
+method’s encoder-decoder architecture is used to learn long-term representations by leveraging sequential and global information, with the
+formula being:
+𝑣 = 𝐸𝑛𝑐𝑜𝑑𝑒(𝑛𝑜𝑟𝑚 ,  ).
+
+(15)
+
+(13)
+
+Finally, the network model uses a Temporal Convolutional Network
+(TCN) (Bai, Kolter, & Koltun, 2018), and the decoder adopts Multi-scale
+Moving Average (MA) blocks (Wang et al., 2023). With diﬀerent kernel
+sizes K, it captures multiple periods based on representation 𝑣, with the
+formula as follows:
+𝑛
+1∑
+̂ 𝑙𝑜𝑛𝑔 =
+𝐴𝑣𝑔𝑃 𝑜𝑜𝑙(𝑃 𝑎𝑑𝑑𝑖𝑛𝑔(𝑀𝐿𝑃 (𝑣)))𝑘𝑖 .
+(14)
+𝑛 𝑖=1
+
+Ω𝑖 =
+
+𝑇
+∑
+
+𝛾 𝑇 −𝑡 𝐹𝑖(𝑡) ,
+
+(17)
+
+𝑡=1
+
+where 𝐹𝑖(𝑡) is the Fisher Information Matrix at time step 𝑡, 𝛾 is a decay
+factor that controls the weight of past information, 𝑇 is the total number
+of time steps or tasks.
+6
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+𝑠𝑓𝑡+1 is the subsequent state. Here, 𝛼 denotes the learning rate, 𝜃 is the
+parameter of the Q-network, 𝜃 − is the parameter of the target network,
+and 𝜙 represents the parameter of the reward network.
+
+3.5. Incremental forecasting fusion double deep Q-Network
+The proposed Incremental Forecasting Fusion Deep Reinforcement
+Learning (IFF-DRL) framework can incorporate various RL algorithms,
+including value-based methods, policy-based methods and Actor-Critic
+based methods. In this section, a classical value-based method called
+Double Deep Q-Network (DDQN) is introduced as an example to illustrate the basic logic of the proposed framework. DDQN is a special
+edition of DQN that designed to address the problem of overestimation. The operational dynamics of the DDQN rely on two neural networks: the main network (𝜃) and the target network (𝜃 − ). For each action taken, a transition tuple (𝑠𝑓𝑡 , 𝑎𝑡 , 𝑟𝑡 , 𝑠𝑓𝑡+1 ) is generated, where 𝑠𝑓𝑡 is
+the fusion state generated by the predicted price and observed price. In
+this process, the main network (𝜃) selects the next action 𝑎max (𝑠𝑓𝑡+1 ; 𝜃) =
+
+3.6. IFF-DDQN training
+The training procedure of IFF-DDQN is illustrated in Algorithm 1 and
+the ﬂowchart of IFF-DDQN is shown in Fig. 3. First, a dataset that span
+from January 1, 2007 to December 31, 2020 is used to train a time-series
+prediction network. The error between the predicted and actual values
+is calculated by mean square error function. The parameters of the network 𝜔 are then updated through gradient descent. Once the training
+of 𝜔 is ﬁnished, the time-series prediction network is transferred to the
+DDQN algorithm. Initially, a state 𝑠𝑑𝑡 is observed and passed through 𝜔,
+the predicted values then generated. Weekly state 𝑠𝑤
+𝑡 is then constructed
+with predicted values and observed state 𝑠𝑑𝑡 . After that, a complete state
+𝑠𝑓𝑡 is generated by the concatenation of 𝑠𝑑𝑡 and 𝑠𝑤
+𝑡 . By observing the
+state 𝑠𝑓𝑡 , the DDQN agent samples an action 𝑎𝑡 , which leads to a new
+state 𝑠𝑑𝑡+1 due to the Markov Decision Process (MDP). A new complete
+
+argmax𝑎𝑡+1 𝑄(𝑠𝑓𝑡+1 , 𝑎𝑡+1 ; 𝜃). The immediate reward 𝑟𝑡 is then received by
+the agent. It is worth to notice that, this method promotes alignment
+with higher rewards, encouraging more proﬁtable and strategically advantageous trading decisions. Consequently, the system enhances the
+overall performance of the trading strategy. The update rule for the
+DDQN is given by Eq. (18):
+
+state 𝑠𝑓𝑡+1 is then generated by the aforementioned process. With the
+
+𝑄(𝑠𝑓𝑡 , 𝑎𝑡 ; 𝜃) ← 𝑄(𝑠𝑓𝑡 , 𝑎𝑡 ; 𝜃) + 𝛼[𝑟𝑡 + 𝛾𝑄(𝑠𝑓𝑡+1 , 𝑎max (𝑠𝑓𝑡+1 ; 𝜃); 𝜃 − ) − 𝑄(𝑠𝑓𝑡 , 𝑎𝑡 ; 𝜃)],
+
+transition tuple (𝑠𝑓𝑡 , 𝑎𝑡 , 𝑟𝑡 , 𝑠𝑓𝑡+1 ), DDQN agent updates its parameters by
+temporal diﬀerence (td) learning technique. During testing phase, EWC
+method is introduced to improve the prediction accuracy of the selected
+time-series network.
+
+(18)
+where 𝑠𝑓𝑡 represents the current state, 𝑎𝑡 is the action taken based on this
+state, 𝑟𝑡 is the reward received after executing action 𝑎𝑡 in state 𝑠𝑓𝑡 , and
+
+Fig. 3. The ﬂowchart of IFF-DDQN algorithm.
+7
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+the Korea Stock Exchange; Nikkei 225 (N225) from Japan, consisting
+of 225 large companies listed on the Tokyo Stock Exchange; Hang Seng
+(HSI) from Hong Kong, representing 50 major companies listed on the
+Hong Kong Stock Exchange; S&P 500 (SP500) from the United States,
+covering 500 large U.S. companies; and Dow Jones Industrial Average
+(DJI) from the U.S., made up of 30 major industrial companies. The
+price curve of selected datasets are shown in Fig. 4. These indices oﬀer
+a diverse view of global market performance. The dataset spans from
+January 1, 2007, to December 31, 2023, oﬀering a comprehensive time
+frame for eﬀective training and testing. The data up to December 31,
+2020, is utilized for model training, while the period from January 1,
+2021, to December 31, 2023, is reserved for testing. Each index in the
+dataset includes ﬁve key features: opening price, lowest price, highest
+price, closing price, and trading volume.
+
+Algorithm 1: IFF-DDQN algorithm.
+Input:  - empty replay buﬀer; 𝜃 - initial network parameters,
+𝜃 − - copy of 𝜃; 𝑁𝑟 - replay buﬀer maximum size; 𝑁𝑏 trainng batch size; 𝑁 − - target network replacement
+frequency, 𝜔𝑝 - time-series prediction network
+parameter, 𝛼 - learning rate ;
+1 Initialize time-series prediction network parameter with
+random initial weights 𝜔𝑝 ← 𝜔0 ;
+2 while the training of 𝜔𝑝 is not converged do
+3
+Select sample (𝑠𝑖 , 𝑦𝑖 ) from dataset D;
+4
+Predict 𝑦̂𝑖 with 𝜔(𝑠𝑖 );
+5
+Calculate loss 𝐿𝜔 = MeanSquareErrorLoss(𝑦𝑖 , 𝑦̂𝑖 );
+6
+
+𝜕𝐿
+
+Calculate gradient 𝛿𝜔 = 𝜕𝜔𝜔 ;
+
+𝜔𝑝 = 𝜔𝑝 − 𝛼 ∗ 𝛿 𝜔 ;
+end
+9 if training phase then
+10
+for episode 𝑒 = {1, 2, ⋯ , 𝑀} do
+11
+while state 𝑠𝑑𝑡 is not terminal do
+12
+Initialize state 𝑠𝑑𝑡 ;
+13
+Predict future price 𝑦𝑡 with 𝜔(𝑠𝑑𝑡 );
+𝑑
+14
+Construct weekly state 𝑠𝑤
+𝑡 with 𝑠𝑡 and 𝑦𝑡 ;
+𝑑 to get the complete state
+15
+Concatenate 𝑠𝑤
+and
+𝑠
+𝑡
+𝑡
+7
+
+4.2. Evaluation metrics
+
+8
+
+4.2.1. Metrics for trading performance
+To provide an objective and comprehensive assessment of the proposed method, this paper utilizes four key investment performance metrics.
+•
+
+Cumulative Return (CR): This metric reﬂects the total return generated on investments over the evaluation period (Luenberger, 2009).
+• Annualized Return (AR): Representing the average return achieved
+annually, AR provides a normalized measure of performance over
+time (Luenberger, 2009).
+• Sharpe Ratio (SR): This risk-adjusted performance metric evaluates
+the excess return per unit of volatility, comparing the strategy’s returns to a risk-free benchmark (Sharpe, 1994).
+• Maximum Drawdown (MDD): This metric quantiﬁes the largest peakto-trough decline in portfolio value over a given period, highlighting
+potential downside risk (Magdon-Ismail & Atiya, 2004).
+
+𝑠𝑓𝑡 ;
+Sample action 𝑎𝑡 by epsilon greedy;
+Sample state 𝑠𝑑𝑡+1 from environment  given 𝑎𝑡
+and Receive reward 𝑟𝑡 ;
+Predict future price 𝑦𝑡+1 with 𝜔(𝑠𝑑𝑡+1 );
+
+16
+17
+
+18
+19
+
+Construct weekly state 𝑠𝑤
+with 𝑠𝑑𝑡+1 and 𝑦𝑡+1 ;
+𝑡+1
+
+20
+
+Concatenate 𝑠𝑤
+and 𝑠𝑑𝑡+1 to get the complete state
+𝑡+1
+𝑠𝑓𝑡+1 ;
+Add transition tuple (𝑠𝑓𝑡 , 𝑎𝑡 , 𝑟𝑡 , 𝑠𝑓𝑡+1 ) to , replacing
+the ﬁrst tuple if ||> 𝑁𝑟 ;
+Sample a minibatch of 𝑁𝑏 tuples
+(𝑠, 𝑎, 𝑟, 𝑠′ ) ∼ Unif();
+Calculate target values, one for each of the 𝑁𝑏
+tuples;
+Deﬁne 𝑎max (𝑠′ ; 𝜃) = argmax𝑎′ 𝑄(𝑠′ , 𝑎′ ; 𝜃);
+Set:
+{
+𝑟,
+if 𝑠′ is terminal;
+𝑦=
+𝑟 + 𝛾𝑄(𝑠′ , 𝑎max (𝑠′ ; 𝜃); 𝜃 − ),
+otherwise.
+
+21
+
+22
+
+23
+
+24
+25
+
+26
+
+By addressing diﬀerent dimensions of return, risk, and volatility, these
+metrics oﬀer a well-rounded evaluation of the investment strategy’s performance.
+4.2.2. Metrics for prediction accuracy
+To evaluate the predictive accuracy, this study employs four widely
+used error metrics.
+•
+
+Mean Squared Error (MSE): MSE calculates the average squared difference between predictions and actual values, assigning greater
+weight to larger errors due to the squaring operation (Bishop &
+Nasrabadi, 2006).
+• Mean Absolute Error (MAE): MAE computes the average absolute difference between predicted and observed values, oﬀering a straightforward measure of prediction error in the same units as the original
+data (Willmott & Matsuura, 2005).
+• Root Mean Squared Error (RMSE): RMSE, derived as the square root
+of MSE, provides a scale-sensitive error metric that is easier to interpret while maintaining sensitivity to larger deviations (Chai &
+Draxler, 2014).
+• Mean Absolute Percentage Error (MAPE): MAPE expresses the error
+as a percentage of the actual values, making it particularly useful
+for comparing model performance across datasets of varying magnitudes (Hodson, 2022).
+
+Do a gradient descent step with loss
+|𝑦 − 𝑄(𝑠, 𝑎; 𝜃)|2 ;
+Replace target parameters 𝜃 − ← 𝜃 every 𝑁 − steps;
+end
+
+27
+28
+
+end
+
+end
+if testing phase then
+31
+Observe sample (𝑠𝑖 , 𝑦𝑖 ) from environment;
+32
+Predict 𝑦̂𝑖 with 𝜔(𝑠𝑖 );
+33
+Construct EWC loss 𝐿𝜔 by euqation (5);
+
+29
+30
+
+34
+35
+
+𝜕𝐿
+
+Update parameter by 𝜔𝑝 = 𝜔𝑝 − 𝛼 ∗ 𝜕𝜔𝜔 ;
+end
+Output: The optimal strategy 𝜋;
+
+These metrics collectively address diﬀerent dimensions of prediction
+error, enabling a more comprehensive assessment of the models’ performance in terms of accuracy and interpretability.
+
+4. Experiments
+4.1. Dataset
+
+4.3. Baseline methods
+To assess the robustness of the proposed model, six major stock indices from diﬀerent regions are selected for evaluation: CAC40 (FCHI)
+from France, representing the 40 largest companies on the Paris Stock
+Exchange; KOSPI (KS11) from Korea, covering all companies listed on
+
+To better evaluate the eﬀectiveness of the proposed method, several
+classic algorithmic trading methods and some cutting-edge ﬁnancial reinforcement learning algorithms are introduced as baseline methods.
+8
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Fig. 4. Close price curve of six stock indices.
+
+The classic methods include Buy and Hold (B&H), Sell and Hold (S&H),
+Mean Reversion with Moving Averages (MR), and Trend Following with
+Moving Averages (TF). The cutting-edge ﬁnancial reinforcement learning algorithms include TDQN, DQN-Vanilla, and Fire (DQN-HER).
+The B&H strategy involves an investor purchasing an asset and holding it for the duration of the investment period, without reacting to price
+
+ﬂuctuations. In contrast, the S&H strategy requires the investor to shortsell an asset at the start of the period and maintain this position until
+the end. MR strategies are based on the assumption that asset prices
+will revert to their historical averages, with this study using a 10-day
+Simple Moving Average (SMA) to identify potential reversion points. TF
+strategies, commonly employed in algorithmic trading, leverage moving averages to generate trading signals. For this analysis, we use 10day and 20-day SMAs to identify possible trading opportunities. The
+TDQN, introduced by Théate and Ernst (Théate & Ernst, 2021), aims
+to optimize trading positions using a ﬁve-layer fully connected Deep
+Q-Network. The DQN-Vanilla, developed by Taghian et al. (Taghian,
+Asadi, & Safabakhsh, 2022), utilizes a simpler two-layer fully connected
+network to make trading decisions based on stock OHLC data. Additionally, the Fire (DQN-HER) model, proposed by Cornalba et al. (Cornalba,
+Disselkamp, Scassola, & Helf, 2024), explores multi-objective deep
+reinforcement learning for trading in both stock and cryptocurrency
+markets. This model incorporates dynamic reward functions and discount factors to improve learning outcomes.
+
+Table 2
+The hyperparameters of various deep reinforcement learning methods.
+Hyperparameter
+
+IFF-A2C
+
+IFF-PPO
+
+IFF-DDQN
+
+Agent network
+Discount factor 𝛾
+Learning rate (𝛼)
+Episode
+Replay memory
+Batch size
+Greedy
+Clip
+
+TimesNet
+0.9
+0.001
+100
+10000
+32
+–
+–
+
+TimesNet
+0.9
+0.001
+100
+10000
+32
+–
+0.1
+
+TimesNet
+0.9
+0.001
+100
+10000
+32
+0.9
+–
+
+Training Time
+
+3.06 h
+
+3.5 h
+
+2.5 h
+
+4.4. Experimental setup
+Table 3
+The hyperparameters of various time-series prediction networks.
+Hyperparameter
+
+AutoConNet
+
+PatchTST
+
+SimMTM
+
+Network layer
+Activation function
+Batch size
+Learning rate (𝛼)
+Optimizer
+Window size
+
+6CNN+7MLP
+ReLu
+32
+0.0001
+Adam
+20
+
+21MLP
+GELU
+32
+0.0001
+Adam
+20
+
+5CNN+12MLP
+ReLu
+32
+0.0001
+Adam
+20
+
+The proposed method is trained separately on six distinct stock index
+datasets, and after the training phase, the model’s performance is evaluated using the corresponding test set for each dataset. This evaluation
+approach assesses the model’s ability to accurately predict actions across
+various stock markets by training on multiple datasets. Table 2 provides
+the details of the hyperparameters for the three reinforcement learning
+methods. Additionally, the initial capital is set at $500,000, and a transaction cost of 0.3 % is applied to the total amount of each trade. In this
+9
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+article, the selection of the agent network follow settings from previous
+work. (Huang et al., 2024c; Zhou, Huang, Cui, & Lu, 2024) Also, sliding window is selected as the data sampling method during the training
+and testing phases. The hardware and software used are listed as follows: the processor is 13th Gen Intel(R) Core(TM) i7-13700KF, the GPU
+is NVIDIA RTX 4090 with the 24GB memory. The software versions used
+are: Python is v3.10, Pytorch is v1.12, and cuda is v12.1. The operating
+system is Windows 10.
+
+ally, studies related to incremental learning have shown that networks
+based on self-supervised learning tend to be more robust when combined
+with incremental learning algorithms compared to other networks. Consequently, a comparative analysis was conducted on three outstanding
+networks in the time series forecasting ﬁeld-AutoConNet, PatchTST, and
+SimMTM (Dong et al., 2024)-to select the most suitable network for
+the proposed method. Table 4 presents a comparison of the MSE, MAE,
+RMSE and MAPE of these three networks on the selected dataset and
+Fig. 5 shows the close price curve predicted by three networks versus
+the real trend. Also, the hyperparameters for training the three networks
+are provided in Table 3.
+It can be seen from Table 4 and Fig. 5 that, PatchTST performed the
+worst compared to the other two networks. As shown in Fig. 5, AutoConNet and SimMTM demonstrate similar prediction performance, with
+both models successfully capturing the overall price movement trends.
+These models eﬀectively predict the general direction of price changes,
+showcasing their strong predictive capabilities. In contrast, PatchTST
+performs considerably worse across all datasets, with the exception of
+the DJI dataset, where it shows some reasonable accuracy. In many
+cases, PatchTST fails to predict the price direction correctly, leading to
+substantial errors. The experimental results, presented in Table 4, further emphasize the performance gap between PatchTST and the other
+two models. PatchTST often shows Mean Squared Error (MSE) and Mean
+Absolute Error (MAE) values that are 5–10 times higher than those
+
+4.5. Experimental results
+4.5.1. Analysis of time-series prediction network
+As previously mentioned, the proposed method uses predicted stock
+price data for several future days by a time series forecasting network as input to the reinforcement learning agent. This provides the
+agent with potential future market trends as a reference when making trading decisions, leading to better trading outcomes. Therefore, to
+enable the reinforcement learning agent to make more informed decisions, a careful evaluation of existing cutting-edge time series forecasting networks is essential. Recent research has revealed that many
+widely-recognized works in time series forecasting, such as PatchTST
+(Nie, Nguyen, Sinthong, & Kalagnanam, 2022) and AutoConNet (Park
+et al., 2024), are based on self-supervised learning principles. AdditionTable 4
+The prediction accuracy of self-supervised networks on six datasets.
+Dataset
+
+AutoConNet
+
+PatchTST
+
+SimMTM
+
+MSE↓
+
+MAE↓
+
+RMSE↓
+
+MAPE↓
+
+MSE↓
+
+MAE↓
+
+RMSE↓
+
+MAPE↓
+
+MSE↓
+
+MAE↓
+
+RMSE↓
+
+MAPE↓
+
+DJI
+
+0.005
+
+0.053
+
+0.067
+
+0.256
+
+0.055
+
+0.212
+
+0.070
+
+0.287
+
+0.006
+
+0.056
+
+0.076
+
+0.265
+
+FCHI
+
+0.005
+
+0.048
+
+0.061
+
+0.305
+
+0.011
+
+0.084
+
+0.097
+
+0.390
+
+0.005
+
+0.049
+
+0.068
+
+0.318
+
+HSI
+
+0.004
+
+0.039
+
+0.057
+
+0.207
+
+0.015
+
+0.083
+
+0.100
+
+0.300
+
+0.004
+
+0.041
+
+0.061
+
+0.213
+
+KS11
+
+0.002
+
+0.033
+
+0.042
+
+0.240
+
+0.022
+
+0.121
+
+0.143
+
+0.412
+
+0.002
+
+0.035
+
+0.047
+
+0.261
+
+SP500
+
+0.005
+
+0.049
+
+0.062
+
+0.227
+
+0.041
+
+0.157
+
+0.181
+
+0.596
+
+0.005
+
+0.051
+
+0.069
+
+0.239
+
+N225
+
+0.006
+
+0.056
+
+0.072
+
+0.296
+
+0.021
+
+0.113
+
+0.137
+
+0.599
+
+0.007
+
+0.058
+
+0.079
+
+0.300
+
+Table 5
+The performance of the various methods on the six datasets.
+Datasets
+
+Metrics
+
+B&H
+
+S&H
+
+MR
+
+TF
+
+TDQN
+
+DQN-Vanilla
+
+DQN-HER
+
+IFF-DDQN
+
+IFF-A2C
+
+IFF-PPO
+
+DJI
+
+CR↑
+AR↑
+SR↑
+MDD↓
+
+4.12 %
+10.55 %
+0.54
+20.23 %
+
+−4.12 %
+−10.38 %
+−0.40
+25.37 %
+
+1.53 %
+4.84 %
+0.27
+17.95 %
+
+−3.08 %
+−7.92 %
+−0.44
+23.78 %
+
+−43.04 %
+−22.51 %
+−1.26
+45.57 %
+
+58.42 %
+21.06 %
+1.28
+10.96 %
+
+76.79 %
+19.11 %
+1.51
+6.92 %
+
+395.09 %
+64.43 %
+4.50
+2.53 %
+
+435.06 %
+66.91 %
+4.75
+4.37 %
+
+459.83 %
+68.38 %
+4.78
+3.21 %
+
+FCHI
+
+CR↑
+AR↑
+SR↑
+MDD↓
+
+7.83 %
+18.28 %
+0.77
+21.95 %
+
+−7.83 %
+−23.17 %
+−0.51
+39.57 %
+
+0.34 %
+2.94 %
+0.12
+23.41 %
+
+3.91 %
+10.89 %
+0.48
+16.08 %
+
+40.86 %
+11.57 %
+0.75
+21.11 %
+
+127.84 %
+32.00 %
+1.95
+7.01 %
+
+34.03 %
+10.48 %
+0.69
+12.50 %
+
+450.37 %
+70.56 %
+4.34
+7.36 %
+
+482.74 %
+66.91 %
+4.43
+3.84 %
+
+482.10 %
+68.38 %
+4.49
+3.43 %
+
+HSI
+
+CR
+AR
+SR
+MDD
+
+−7.07 %
+−22.11 %
+−0.65
+45.38 %
+
+7.07 %
+16.28 %
+0.84
+17.05 %
+
+−3.47 %
+−6.32 %
+−0.18
+43.65 %
+
+−2.01 %
+−2.51 %
+−0.08
+32.69 %
+
+37.11 %
+11.05 %
+0.67
+33.49 %
+
+86.61 %
+29.25 %
+1.19
+17.62 %
+
+46.92 %
+13.46 %
+0.70
+18.72 %
+
+1410.73 %
+102.15 %
+4.64
+4.82 %
+
+1244.17 %
+98.79 %
+4.48
+4.15 %
+
+1462.42 %
+103.19 %
+4.59
+4.83 %
+
+N225
+
+CR↑
+AR↑
+SR↑
+MDD↓
+
+2.98 %
+8.83 %
+0.39
+16.61 %
+
+−3.08 %
+−7.03 %
+−0.28
+24.67 %
+
+−2.24 %
+−4.91 %
+−0.23
+27.58 %
+
+−7.30 %
+−25.15 %
+−0.98
+38.94 %
+
+−15.90 %
+−4.48 %
+−0.25
+36.56 %
+
+23.31 %
+12.14 %
+0.48
+19.41 %
+
+44.22 %
+12.87 %
+0.80
+15.95 %
+
+564.87 %
+76.58 %
+4.47
+4.28 %
+
+492.47 %
+72.75 %
+4.44
+3.85 %
+
+696.58 %
+82.34 %
+4.75
+2.46 %
+
+SP500
+
+CR↑
+AR↑
+SR↑
+MDD↓
+
+0.54 %
+4.89 %
+0.17
+25.05 %
+
+−0.54 %
+1.90 %
+0.05
+26.70 %
+
+1.46 %
+7.91 %
+0.30
+16.06 %
+
+−1.57 %
+−4.06 %
+−0.15
+24.28 %
+
+−37.85 %
+−25.03 %
+−1.09
+47.15 %
+
+26.22 %
+18.37 %
+0.76
+20.80 %
+
+90.21 %
+21.24 %
+1.37
+11.69 %
+
+470.91 %
+69.23 %
+4.21
+4.50 %
+
+553.27 %
+73.39 %
+4.63
+2.73 %
+
+554.09 %
+73.51 %
+4.46
+2.79 %
+
+KS11
+
+CR↑
+AR↑
+SR↑
+MDD↓
+
+−2.69 %
+−5.86 %
+−0.24
+34.23 %
+
+2.69 %
+7.70 %
+0.40
+13.29 %
+
+−0.36 %
+0.86 %
+0.04
+29.59 %
+
+4.70 %
+12.20 %
+0.57
+15.47 %
+
+−5.00 %
+−0.46 %
+−0.03
+24.98 %
+
+−9.04 %
+−2.69 %
+−0.11
+33.65 %
+
+18.71 %
+6.33 %
+0.35
+21.60 %
+
+488.77 %
+72.14 %
+4.74
+4.07 %
+
+479.35 %
+71.60 %
+4.75
+4.38 %
+
+552.84 %
+75.46 %
+5.05
+3.10 %
+
+10
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Fig. 5. Prediction of AutoConNet, PatchTST and SimMTM vs Real Trend on six datasets.
+
+observed for AutoConNet and SimMTM, indicating its overall inferior
+performance.
+When comparing AutoConNet and SimMTM, we ﬁnd that their
+performance metrics-including MSE, MAE, Root Mean Square Error
+(RMSE), and Mean Absolute Percentage Error (MAPE)-are quite similar,
+with only slight variations between them. However, on a broader scale,
+AutoConNet consistently outperforms SimMTM across all six datasets,
+albeit with marginal improvements. This suggests that AutoConNet is a
+more robust model for the task at hand, achieving better overall prediction accuracy and stability.
+
+Therefore, it can be concluded that AutoConNet is better suited for
+the objectives of this study, oﬀering a slight yet consistent advantage
+over SimMTM in terms of predictive performance.
+4.5.2. Comparison with baselines
+To better assess the eﬀectiveness of the proposed method, the test
+results of the IFF-DRL agent have been used for comparative analysis
+against the baselines mentioned earlier.
+It is worth noting that although the proposed method introduces an
+incremental learning algorithm during the testing phase to enhance the
+11
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Table 6
+The prediction accuracy of AutoConNet with Elastic Weight Consolidation.
+Dataset
+
+AutoConNet
+
+AutoConNet (EWC)
+
+MSE↓
+
+MAE↓
+
+RMSE↓
+
+MAPE↓
+
+MSE↓
+
+MAE↓
+
+RMSE↓
+
+MAPE↓
+
+DJI
+
+0.0050
+
+0.053
+
+0.067
+
+0.256
+
+0.0043
+
+0.043
+
+0.061
+
+0.230
+
+FCHI
+
+0.0050
+
+0.048
+
+0.061
+
+0.305
+
+0.0047
+
+0.047
+
+0.060
+
+0.290
+
+HSI
+
+0.0041
+
+0.039
+
+0.057
+
+0.207
+
+0.0039
+
+0.038
+
+0.056
+
+0.197
+
+KS11
+
+0.0022
+
+0.033
+
+0.042
+
+0.240
+
+0.0021
+
+0.033
+
+0.042
+
+0.220
+
+SP500
+
+0.0048
+
+0.049
+
+0.062
+
+0.227
+
+0.0047
+
+0.046
+
+0.060
+
+0.218
+
+N225
+
+0.0058
+
+0.056
+
+0.072
+
+0.296
+
+0.0056
+
+0.056
+
+0.071
+
+0.280
+
+Table 7
+The performance of FF-DDQN and IFF-DDQN on six datasets.
+
+pre-trained time series forecasting network, AutoConNet, with continuous learning capabilities and improved prediction accuracy, the incremental learning algorithm will not be applied in this phase. The focus here is to validate the improvement in the reinforcement learning
+agent’s performance through the use of daily & weekly data generated
+from both predicted and observed prices. On the other hand, to verify
+whether the proposed method improves performance across diﬀerent reinforcement learning algorithms, three classical algorithms-DDQN, A2C,
+and PPO-were integrated into the proposed framework, and called IFFDDQN, IFF-A2C, and IFF-PPO, respectively. The detailed experimental
+results are shown in Table 5. As shown in Table 5, the proposed method
+outperformed all baseline approaches in terms of CR, SR, AR, and MDD.
+Across the six datasets involved in the experiments, IFF-DDQN, IFFA2C, and IFF-PPO each achieved over 390 % CR, while the best baseline method only reached 127.84 % CR. Among the proposed methods,
+the one combined with PPO, IFF-PPO, delivered the best performance,
+achieving a 1462.42 % CR and 103.19 % AR on the HSI dataset. On the
+other hand, IFF-DDQN, the method combined with DDQN, had the lowest performance, with a CR of 395.09 % on the DJI dataset. However,
+this still signiﬁcantly exceeded all baseline methods. These results indicate that the proposed method eﬀectively enhances traditional reinforcement learning algorithms, enabling the agent to gain a clearer understanding of price data during both the training and testing phases,
+leading to superior trading strategies.
+
+Method
+
+Datasets
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+IFF-DDQN
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+395.09 %
+450.37 %
+1410.73 %
+564.87 %
+470.91 %
+488.77 %
+
+64.43 %
+70.56 %
+102.15 %
+76.58 %
+69.23 %
+72.14 %
+
+4.50
+4.34
+4.64
+4.47
+4.21
+4.74
+
+2.53 %
+7.36 %
+4.82 %
+4.28 %
+4.50 %
+4.07 %
+
+FF-DDQN
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+297.06 %
+408.20 %
+1275.02 %
+484.72 %
+390.90 %
+479.46 %
+
+56.85 %
+67.95 %
+99.58 %
+72.45 %
+64.48 %
+71.63 %
+
+3.91
+4.02
+4.36
+4.13
+3.73
+4.68
+
+5.86 %
+2.35 %
+6.33 %
+4.51 %
+3.89 %
+3.87 %
+
+Table 8
+The performance of FF-A2C and IFF-A2C on six datasets.
+
+4.5.3. Improving prediction accuracy with incremental learning
+As being discussed in the previous sections, an incremental learning algorithm will be introduced into the current framework once the
+testing phase is begin. The primary goal of incremental learning is to
+enhance the continue learning ability of the selected time-series prediction network, improving its prediction accuracy even during testing. In
+this experiment, a classic incremental learning algorithm online EWC
+has been used during testing phase. As a variant of EWC method, online EWC is widely used in lots of incremental learning paradigm and
+achieved astonishing result in recent years. Detail explanation of online
+EWC has shown in Section 3.4.
+Table 6 showed the comparative analysis of the prediction accuracy
+of AutoConNet before and after incorporating online EWC method in
+testing phase. It is evident that the MSE, MAE, RMSE and MAPE has
+decreased with the help of incremental learning. Even in KS11 dataset,
+which AutoConNet got a extremely small MSE and MAE, online EWC
+can still improve its performance.
+To further demonstrate the eﬀectiveness of the proposed method,
+a comparative analysis between current framework with and without
+Incremental Learning is necessary. Due to the fact that a lower MSE and
+MAE demonstrate a smaller gap between prediction and ground-truth.
+Therefore, the proposed method should achieve a better result with the
+help of online EWC method. Tables 7–9 have shown the comparison
+result.
+The bold part of three tables represent the best performance. As introduced in previous section, IFF-DDQN, IFF-A2C and IFF-PPO means
+the Incremental Forcasting Fusion Deep Reinforcement Learning (IFF-
+
+Method
+
+Datasets
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+IFF-A2C
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+435.06 %
+482.74 %
+1244.17 %
+492.47 %
+553.27 %
+479.35 %
+
+66.91 %
+72.46 %
+98.79 %
+72.75 %
+73.39 %
+71.60 %
+
+4.75
+4.43
+4.48
+4.44
+4.46
+4.75
+
+4.37 %
+3.84 %
+4.15 %
+3.85 %
+2.79 %
+4.38 %
+
+FF-A2C
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+407.11 %
+382.43 %
+1133.20 %
+430.89 %
+365.94 %
+401.41 %
+
+65.21 %
+66.14 %
+96.31 %
+69.25 %
+62.82 %
+66.87 %
+
+4.54
+4.00
+4.31
+3.96
+3.54
+4.27
+
+3.42 %
+4.18 %
+8.42 %
+6.24 %
+8.47 %
+3.28 %
+
+Table 9
+The performance of FF-PPO and IFF-PPO on six datasets.
+Method
+
+Datasets
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+IFF-PPO
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+459.83 %
+482.10 %
+1462.42 %
+696.58 %
+554.09 %
+552.84 %
+
+68.38 %
+72.40 %
+103.19 %
+82.34 %
+73.51 %
+75.46 %
+
+4.78
+4.49
+4.59
+4.75
+4.46
+5.05
+
+3.21 %
+3.43 %
+4.83 %
+2.46 %
+2.79 %
+3.10 %
+
+FF-PPO
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+343.15 %
+388.56 %
+1206.72 %
+560.70 %
+413.60 %
+494.31 %
+
+60.82 %
+66.69 %
+98.07 %
+76.47 %
+66.00 %
+72.49 %
+
+4.13
+3.81
+4.33
+4.29
+3.72
+4.64
+
+4.92 %
+5.09 %
+4.83 %
+7.47 %
+5.44 %
+4.04 %
+
+DRL) integrated with three traditional DRL algorithm, which involve
+incremental learning during testing phase. In this case, FF-DQN, FF-A2C
+and FF-PPO means the proposed method without incremental learning.
+It can be observed that with the help of online EWC algorithm, the prediction accuracy of AutoConNet has been increased, resulting an improvement of the performance of three agents. However, not all metrics
+12
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Fig. 6. Comparison of Future 3-Day Price Change Distribution Across 6 Datasets.
+
+showed improvement. By observing the Maximum Drawdown (MDD),
+it can be seen that, except for IFF-PPO, the MDD of the other two algorithms decreased to some extent on certain datasets. For example, the
+MDD of IFF-DDQN on the FCHI dataset increased from 2.35 % to 7.36 %.
+The MDD of IFF-A2C on the DJI dataset increased from 3.42 % to 4.37 %.
+These reductions in MDD also made the improvement in CR (cumulative
+return) relatively less prominent. Interestingly, the proposed method
+showed the most signiﬁcant improvement for the PPO algorithm. IFFPPO not only achieved improvements across all metrics but also outperformed the other two algorithms in average performance. This could, to
+some extent, indicate the eﬀectiveness of the PPO algorithm in singleasset trading. Future research could focus on exploring the PPO algorithm further.
+However, by observing the experimental results, it can be found that
+the results on the HSI dataset are unexpectedly high. The CR on the
+other datasets mostly ﬂuctuates between 300 % and 600 %, with only
+a few exceeding 600 %. In contrast, all CR values on the HSI dataset
+exceed 1100 %. To avoid potential issues, it is necessary to analyze the
+dataset. Fig. 6 shows the proportion of closing prices in the test sets of
+six datasets that ﬂuctuate by more than 1.5 % over three days. As mentioned earlier, the reward function we used is the Min-Max function,
+which assigns the maximum price change ratio over the next three days
+as the reward for buying or selling. When the agent chooses to hold, the
+reward is calculated as a threshold minus the maximum price change
+ratio over those three days, with this threshold set to 1.5 % in our experiments. It is evident from the six pie charts that the HSI dataset has
+the highest proportion of closing prices ﬂuctuating over 1.5 %, while the
+other datasets show less than half of that proportion, with HSI exceeding 50 %. Notably, the HSI dataset has 31.9 % of its declines surpassing
+1.5 %. It’s important to note that our experimental environment allows
+the agent to execute short-selling actions, and since a signiﬁcant portion
+of HSI is in a downtrend, it is understandable why the experimental results on the HSI dataset are so high.
+
+from January 1, 2007, to December 31, 2020, while the test dataset
+spans January 1, 2021, to December 31, 2023. However, it is widely
+known that the Covid-19 pandemic began in January 2020 and lasted
+for nearly three years, ending around late 2022. Evidently, the training
+dataset used in this study includes part of the data from the pandemic
+period. To demonstrate the reliability of the proposed method and its
+robustness to unforeseen events, experiments should be conducted using
+a training dataset that excludes the pandemic period. The pandemic and
+post-pandemic periods would then serve as the test dataset, allowing us
+to observe the model’s performance across multiple datasets.
+Therefore, the IFF-DRL method was tested on aforementioned six
+datasets, where the training set spanned from January 1, 2007, to December 31, 2019, and the test set covered January 1, 2020, to December
+31, 2023. The experimental results are recorded in Table 10. It can be
+observed that, despite the test set length increasing by nearly one year
+to a total of four years, the trading performance of IFF-DRL on DJI,
+FCHI, HSI, and KS11 is lower than the corresponding results shown in
+Tables 7–9, where the test set length was only three years for the same
+algorithm. Additionally, a comparison reveals that the experimental results in Table 10 exhibit relatively high Maximum Drawdown (MDD),
+with most exceeding 10 %. Even for SP500 and N225, which showed
+relatively favorable outcomes, the MDD values remain high. This clearly
+demonstrates the negative impact of the Covid-19 pandemic, as an unforeseen event, on trading performance.
+To further observe the impact of including or excluding Covid-19 period data in the training set on the trading performance of IFF-DRL, the
+models trained in Table 9 will be tested on the test set containing data
+from January 1, 2021, to December 31, 2023. This test set is consistent
+with the one used in the experiments of Sections 4.5.2 and 4.5.3. The
+results of these tests are recorded in Tables 11–13. In these three tables,
+IFF-DRL (with Covid-19) refers to the experimental results where the
+training set includes data from the pandemic period, which have been
+discussed in Section 4.5.3. On the other hand, IFF-DRL (without Covid19) represents the experimental results where the training set excludes
+data from the pandemic period.
+From the three tables, we can observe that when the training set does
+not include data from the pandemic period, the trading performance of
+IFF-DRL signiﬁcantly declines. For example, in Table 11, the cumulative return of IFF-DDQN on the DJI dataset dropped from 395.09 % to
+73.72 %, while on the HSI dataset, the cumulative return decreased from
+
+4.6. Further analysis of model reliability and robustness
+To further validate the reliability and robustness of the proposed
+method, it is necessary to evaluate the model’s performance in response
+to unexpected events through additional experiments. As described in
+Section 4.1, the training dataset used in this study includes price data
+13
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Table 10
+The performance of IFF-DRL with training set from 2007.1.1 to 2019.12.31 and testing set from 2020.1.1 to 2023.12.31.
+Dataset
+
+IFF-DQN
+
+IFF-A2C
+
+IFF-PPO
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+DJI
+
+164.35 %
+
+31.11 %
+
+1.42
+
+14.49 %
+
+221.09 %
+
+35.75 %
+
+1.67
+
+12.58 %
+
+342.19 %
+
+42.84 %
+
+2.09
+
+7.79 %
+
+FCHI
+
+377.52 %
+
+47.84 %
+
+2.33
+
+9.94 %
+
+484.89 %
+
+52.46 %
+
+2.55
+
+17.44 %
+
+700.24 %
+
+59.00 %
+
+3.02
+
+6.06 %
+
+HSI
+
+870.02 %
+
+60.19 %
+
+3.06
+
+15.16 %
+
+889.57 %
+
+60.62 %
+
+3.02
+
+18.15 %
+
+1121.54 %
+
+64.57 %
+
+3.19
+
+14.21 %
+
+N225
+
+855.43 %
+
+59.97 %
+
+3.58
+
+7.21 %
+
+981.69 %
+
+62.32 %
+
+3.74
+
+12.47 %
+
+812.98 %
+
+59.15 %
+
+3.44
+
+14.53 %
+
+SP500
+
+950.16 %
+
+59.7 %
+
+3.14
+
+5.73 %
+
+779.45 %
+
+56.51 %
+
+2.9
+
+6.29 %
+
+541.87 %
+
+50.54 %
+
+2.53
+
+6.77 %
+
+KS11
+
+389.29 %
+
+45.88 %
+
+2.52
+
+10.62 %
+
+436.08 %
+
+47.85 %
+
+2.63
+
+10.68 %
+
+525.07 %
+
+50.97 %
+
+2.93
+
+6.83 %
+
+1410.73 % to 555.37 %. It is evident that the IFF-DRL algorithm, when
+trained without the pandemic data, experienced a decline of more than
+50 % in cumulative return across most datasets. Additionally, the increase in Maximum Drawdown (MDD) is also noteworthy. For instance,
+IFF-DDQN, IFF-A2C, and IFF-PPO all saw their MDD on the HSI dataset
+rise from less than 5 % to over 15 %. Obviously, when the training set excludes the pandemic data, the overall trading performance of IFF-DRL
+suﬀers a substantial decline, with many datasets performing less than
+half as well as before.
+However, when comparing the experimental results from the three
+tables with those in Table 5, we can observe that, despite the absence of
+the critical pandemic data in the training set, IFF-DRL outperforms traditional methods such as Buy-and-Hold (B&H) and Mean Reversion (MR)
+across all datasets. When compared to baseline models such as TDQN,
+DQN-HER, and DQN-Vanilla, IFF-DRL also demonstrates superior performance, with better results in most datasets. For example, IFF-DDQN
+on DJI dataset achieves only 73.72 % CR, which is lower than the performance of DQN-HER shown in Table 5. However, the annualized return
+of IFF-DDQN, which yields 26.39 %, is way better than DQN-HER that
+only have 19.21 %. This implies that, although the unforeseen pandemic
+event had a negative impact on the proposed method, the approach still
+ensures relatively strong trading performance. The method exhibits robustness and adaptability, achieving substantial success even in the face
+of missing critical training data.
+Based on the above experimental results, three conclusions can be
+drawn. First, IFF-DRL is highly reliable and robust, capable of delivering
+reliable trading strategies and excellent trading performance when confronted with unknown events. Second, this study incorporates a “short
+selling” mechanism within the trading framework, enabling participating agents to take advantage of declining stock prices by executing actions beyond merely buying or holding. By leveraging this capability,
+the proposed IFF-DRL framework demonstrates an enhanced ability to
+adapt to sudden market downturns. Even during sharp price drops, the
+framework can eﬀectively navigate unfavorable conditions and achieve
+proﬁtable outcomes, showcasing its robustness in volatile market environments. Third, these experiments demonstrate that IFF-DRL is not an
+algorithm that only performs well on data from speciﬁc time periods.
+The integration of the self-supervised predictive network enables it to
+react to unexpected events, thus avoiding potential large losses. This
+shows that the proposed method is adaptable and can maintain strong
+performance even in the presence of unforeseen disruptions.
+
+Table 11
+Comparison of IFF-DDQN Performance Between Training Sets With and Without
+Covid-19 Period Data.
+Method
+
+Datasets
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+IFF-DDQN (with Covid-19)
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+395.09 %
+450.37 %
+1410.73 %
+564.87 %
+470.91 %
+488.77 %
+
+64.43 %
+70.56 %
+102.15 %
+76.58 %
+69.23 %
+72.14 %
+
+4.50
+4.34
+4.64
+4.47
+4.21
+4.74
+
+2.53 %
+7.36 %
+4.82 %
+4.28 %
+4.50 %
+4.07 %
+
+IFF-DDQN (without Covid-19)
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+73.72 %
+151.09 %
+555.37 %
+307.67 %
+256.09 %
+141.38 %
+
+26.39 %
+42.48 %
+77.07 %
+60.34 %
+53.76 %
+40.68 %
+
+1.59
+2.39
+3.26
+3.26
+2.99
+2.27
+
+9.02 %
+9.91 %
+15.13 %
+7.18 %
+5.73 %
+10.63 %
+
+Table 12
+Comparison of IFF-A2C Performance Between Training Sets With and Without
+Covid-19 Period Data.
+Method
+
+Datasets
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+IFF-A2C (with Covid-19)
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+435.06 %
+482.74 %
+1244.17 %
+492.47 %
+553.27 %
+479.35 %
+
+66.91 %
+72.46 %
+98.79 %
+72.75 %
+73.39 %
+71.60 %
+
+4.75
+4.43
+4.48
+4.44
+4.46
+4.75
+
+4.37 %
+3.84 %
+4.15 %
+3.85 %
+2.79 %
+4.38 %
+
+IFF-A2C (without Covid-19)
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+87.05 %
+151.84 %
+544.51 %
+350.47 %
+232.59 %
+120.43 %
+
+29.33 %
+42.59 %
+76.54 %
+63.72 %
+51.36 %
+37.04 %
+
+1.88
+2.41
+3.22
+3.57
+2.87
+2.11
+
+10.51 %
+10.77 %
+16.9 %
+10.75 %
+6.28 %
+10.00 %
+
+Table 13
+Comparison of IFF-PPO Performance Between Training Sets With and Without
+Covid-19 Period Data.
+Method
+
+Datasets
+
+CR↑
+
+AR↑
+
+SR↑
+
+MDD↓
+
+IFF-PPO (with Covid-19)
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+459.83 %
+482.10 %
+1462.42 %
+696.58 %
+554.09 %
+552.84 %
+
+68.38 %
+72.40 %
+103.19 %
+82.34 %
+73.51 %
+75.46 %
+
+4.78
+4.49
+4.59
+4.75
+4.46
+5.05
+
+3.21 %
+3.43 %
+4.83 %
+2.46 %
+2.79 %
+3.10 %
+
+IFF-PPO (without Covid-19)
+
+DJI
+FCHI
+HSI
+N225
+SP500
+KS11
+
+82.05 %
+153.14 %
+550.22 %
+296.92 %
+225.77 %
+118.66 %
+
+28.25 %
+42.79 %
+76.81 %
+59.36 %
+50.64 %
+36.76 %
+
+1.78
+2.43
+3.25
+3.26
+2.82
+2.05
+
+10.04 %
+10.79 %
+19.56 %
+14.36 %
+6.27 %
+10.66 %
+
+4.7. Analysis of trading strategy
+Following the analysis of the IFF-DRL’s eﬀectiveness across various
+experiments, the actions taken by the agent within the datasets were
+further examined. Figs. 7–9 illustrate the trading actions executed by the
+IFF-DDQN agent across three datasets. These actions are superimposed
+on stock price trend charts, providing a clear visual representation of
+how the agent’s decisions align with price movements, making it easier
+to understand the rationale behind its trading strategies.
+14
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Fig. 7. Actions of IFF-DDQN Agent in HSI.
+
+Fig. 8. Actions of IFF-DDQN Agent in N225.
+
+Figs. 7 and 9 show the trading actions of the IFF-DDQN agent on
+the HSI and N225 datasets. A notable observation is that both datasets
+exhibit signiﬁcant price volatility, which can be conﬁrmed by Fig. 6,
+as these two datasets have the highest proportion of price ﬂuctuations
+exceeding 1.5 % over the next three days. In response to this situation,
+the agent employs a high-frequency trading strategy. A close-up view
+of Figs. 7 and 9 clearly shows that stock prices experience substantial
+short-term ﬂuctuations, and the agent often buys at the lows of these
+ﬂuctuations and sells at the highs, undoubtedly resulting in proﬁts.
+
+When the agent encounters a situation with low price volatility, its
+strategy also changes accordingly. Taking the zoomed-in section of Fig. 9
+as an example, the agent executed a “short” trading decision around
+day 325. A few days later, anticipating an upcoming price increase, the
+agent switched to a “long” trading decision and then refrained from
+trading for nearly 10 days until predicting a long-term downward trend
+starting around day 340, at which point it executed a “short” operation.
+Therefore, by observing the three ﬁgures, it can be conﬁdently stated
+that the agent eﬀectively monitors the market environment and price
+
+Fig. 9. Actions of IFF-DDQN Agent in DJI.
+15
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+6. Conclusion
+
+movement patterns, adjusting its trading strategy appropriately based
+on diﬀerent conditions to achieve proﬁts.
+
+This paper introduces a novel deep reinforcement learning framework called Incremental Forecasting Fusion Deep Reinforcement Learning (IFF-DRL), which signiﬁcantly improves the trading performance
+of DRL agent in ﬁnancial environment. In the proposed method, selfsupervised learning helps model exploit abundant unlabeled data to uncover complex structures and temporal dependencies and incremental
+learning enables models to continuously adjust with new data to improve prediction accuracy. By incorporating a time-series prediction network AutoConNet to predict future price and generate daily & weekly
+data based on observed and predicted price data, the agent can not only
+see the potential price change pattern in the future, but also observe the
+market in a more macro level. In this case, deep reinforcement learning model can extract better latent expression from the data. Moreover,
+an incremental learning algorithm, Elastic Weight Consolidation (EWC)
+is introduced during testing phase, which enable the time-series network to have the ability to continue learning and also improve its prediction accuracy. This method’s eﬃcacy is validated through extensive
+testing across various datasets, including DJI, FCHI, HSI, SP500, N225,
+and KS11.
+Key contributions of this paper include:
+
+5. Discussion
+In this comprehensive analysis of the proposed IFF-DRL, our experiment through various datasets and scenarios demonstrate a consistent outperformance of selected baseline methods, as measured by
+CR, AR, SR and MDD. The superiority of the proposed method, detailed
+in Table 5, can be attributed to its novel data generation mechanism.
+This unique mechanism allow a time-series prediction network to predict price data in the next 𝑁 days base on the observed state, then generate the daily & weekly data that consist of observed and predicted
+price data. In this case, once the daily & weekly data is treated as the
+input state of reinforcement learning, agent have the chance to not only
+making decision by seeing future, but also observe the price data in a
+macro-level. This arrangement enhances the consistency and reliability of the learning process, particularly in the volatile environment of
+ﬁnancial markets.
+Further analysis of prediction accuracy has been shown in Section 4.5.3. The integration of online EWC algorithm increased the prediction accuracy of AutoConNet, resulting in the improvement of the
+overall performance of the proposed method. Since ﬁnancial markets
+are inherently unstable and continuously evolving, the stock price patterns learned by time series prediction networks in the training set may
+not necessarily be eﬀective in the test set. Therefore, the greatest significance of introducing the concept of incremental learning is to enable
+the network to maintain its learning capability and, to some extent, improve the accuracy of its predictions. Experiments show that with the
+help of the incremental learning algorithm, AutoConNet’s prediction accuracy has been enhanced. Moreover, as the predicted price data more
+closely aligns with the real data, the agent made more optimal trading
+decisions during the trading process, leading to an overall performance
+improvement.
+Furthermore, the proposed method not only improves a single deep
+reinforcement learning algorithm but also shows signiﬁcant enhancement across several types of algorithms, including value-based, actorcritic based, and policy-based methods. By observing Tables 7–9, it can
+be seen that the PPO algorithm demonstrates the best performance under the proposed method.
+However, this study has several limitations. First, the experiments
+conducted in this research were limited to only a few indices and stocks,
+and the potential for generalizing the model to other assets or broader
+ﬁnancial markets was not explored. This restriction limits the scalability
+of the proposed methods, and future work could focus on testing these
+algorithms across a wider range of assets and market conditions to assess
+their generalizability.
+Second, the study only used daily and weekly OHLCV data as input for the models, without exploring the possibility of incorporating
+additional ﬁnancial indicators that could provide more comprehensive
+insights into market behavior. Including other features, such as macroeconomic variables, sentiment analysis, or technical indicators, could potentially improve the models’ ability to capture the complexities of ﬁnancial markets and enhance their predictive power.
+Third, this research only used online EWC algorithm to improve
+the prediction accuracy of AutoConNet and did not explore the use of
+other incremental learning methods. However, it does not imply that
+online EWC is the only choice for incremental learning algorithms.
+Classical methods such as replay buﬀer, online gradient descent, or
+recursive least squares can also be applied to the proposed method.
+The experiments on incremental learning in this paper aim to explore
+whether time series prediction networks with continual learning capabilities lead to better prediction accuracy, and whether higher accuracy improves the agent’s performance in trading. In future work, some
+cutting-edge incremental learning methods will be incorporated into the
+research.
+
+1. Introducing a novel framework that allow deep reinforcement learning agent can not only see the future price change but also observe
+price data in a macro level. As a result, the agent within the proposed
+framework can better extract useful latent expression and generate
+more optimal trading strategies.
+2. The introduction of incremental learning algorithm improves the
+overall performance of IFF-DRL signiﬁcantly. Due to the fact that
+ﬁnancial market is ever changing, the price evolving pattern that
+time-series prediction network learned from training set may not
+be suﬃcient when it comes to testing set. In this case, incremental learning algorithm like EWC that being used in this paper enable
+the neural network keep learning during testing phase. As result, the
+overall prediction MSE of AutoConNet achieved an average reduction of 5.93 % across six datasets, which leads to the improvement
+of IFF-DRL’s trading performance.
+3. Incorporating self-supervised time-series prediction network
+AutoConNet to predict future ﬁnancial price data. Self-supervised
+learning enable model to explore uncover complex structures and
+temporal dependencies, improving model generalization and pattern
+detection. As a result, AutoConNet provides precise prediction of
+future data that help improve trading performance.
+4. Developing a new types of data, namely daily & weekly data, that
+provide a more macro-level perspectives to reinforcement learning
+agent, which signiﬁcantly improves the trading eﬃciency.
+5. The eﬀectiveness of the proposed framework has been well demonstrated by combining with diﬀerent deep reinforcement learning algorithm. Although Algorithm 1 used DDQN to demonstrate the basic
+idea of the proposed method, it does not mean that IFF-DRL can only
+combined with DDQN. The following experiment result in Section 4
+showed that the proposed method can be combined with policybased method like PPO or Actor-Critic based method like A2C.
+Despite its strengths, the proposed framework still encounter some
+limitations that need to be addressed in the future research. Future work
+will focus on expanding the scope of experiments, incorporating additional data sources, and exploring the integration of diﬀerent types of
+incremental learning algorithms to further improve the performance of
+the proposed methods. Furthermore, the incorporation of more ﬁnancial indicators will be essential for further advancing the capabilities of
+ﬁnancial reinforcement learning models.
+Data availability
+The data that has been used is conﬁdential.
+16
+
+Expert Systems With Applications 289 (2025) 128297
+
+C. Zhou et al.
+
+Declaration of competing interest
+
+Jing, B., Wang, Y., Sui, G., Hong, J., He, J., Yang, Y., Li, D., & Ren, K. (2024). Automated
+contrastive learning strategy search for time series. arXiv:2403.12641
+Kaiser, L., Babaeizadeh, M., Milos, P., Osinski, B., Campbell, R. H., Czechowski, K., Erhan, D., Finn, C., Kozakowski, P., Levine, S. et al. (2019). Model-based reinforcement
+learning for atari. arXiv:1903.00374
+Kim, T., Kim, J., Tae, Y., Park, C., Choi, J.-H., & Choo, J. (2021). Reversible instance normalization for accurate time-series forecasting against distribution shift, . International
+conference on learning representations.
+Kirkpatrick, J., Pascanu, R., Rabinowitz, N., Veness, J., Desjardins, G., Rusu, A. A., Milan,
+K., Quan, J., Ramalho, T., Grabska-Barwinska, A. et al. (2017). Overcoming catastrophic forgetting in neural networks. Proceedings of the National Academy of Sciences,
+114(13), 3521–3526.
+Lample, G., & Chaplot, D. S. (2017). Playing FPS games with deep reinforcement learning,
+. Proceedings of the AAAI conference on artiﬁcial intelligence, 31(1).
+Li, J., & Dai, Q. (2019). A new dual weights optimization incremental learning algorithm
+for time series forecasting. Applied Intelligence, 49, 3668–3693.
+Li, J., Dai, Q., & Ye, R. (2019). A novel double incremental learning algorithm for time
+series prediction. Neural Computing and Applications, 31, 6055–6077.
+Li, Y., Ni, P., & Chang, V. (2020). Application of deep reinforcement learning in stock
+trading strategies and stock forecasting. Computing, 102(6), 1305–1322.
+Liu, Q., Zhuang, C., Gao, P., & Qin, J. (2024). CDFormer: When degradation prediction embraces diﬀusion model for blind image super-resolution, . Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, 195,
+(pp. 7455–7464).
+Liu, S., Yu, H., Liao, C., Li, J., Lin, W., Liu, A. X., & Dustdar, S. (2021). Pyraformer: Lowcomplexity pyramidal attention for long-range time series modeling and forecasting.
+Luenberger, D. (2009). Investment science: International edition. OUP Catalogue.
+Magdon-Ismail, M., & Atiya, A. F. (2004). Maximum drawdown. Risk Magazine, 17(10),
+99–102.
+Melgar-García, L., Gutiérrez-Avilés, D., Rubio-Escudero, C., & Troncoso, A. (2023). A
+novel distributed forecasting method based on information fusion and incremental
+learning for streaming time series. Information Fusion, 95, 163–173.
+Moustakidis, V., Passalis, N., & Tefas, A. (2024). Online probabilistic knowledge distillation on cryptocurrency trading using deep reinforcement learning. Pattern Recognition
+Letters, 186, 243–249.
+Nie, Y., Nguyen, N. H., Sinthong, P., & Kalagnanam, J. (2022). A time series is worth 64
+words: Long-term forecasting with transformers. arXiv:2211.14730
+Park, J., Gwak, D., Choo, J., & Choi, E. (2024). Self-supervised contrastive forecasting.
+arXiv:2402.02023
+Sharpe, W. F. (1994). The sharpe ratio. Journal of portfolio management, 21(1), 49–58.
+Sun, Q., Wei, X., & Yang, X. (2024). GraphSAGE with deep reinforcement learning for
+ﬁnancial portfolio optimization. Expert Systems with Applications, 238, 122027.
+Taghian, M., Asadi, A., & Safabakhsh, R. (2022). Learning ﬁnancial asset-speciﬁc trading
+rules via deep reinforcement learning. Expert Systems with Applications, (p. 116523).
+Théate, T., & Ernst, D. (2021). An application of deep reinforcement learning to algorithmic trading. Expert Systems with Applications, 173, 114632.
+Vijayarani, S., Suganya, E., & Jeevitha, T. (2020). Predicting stock market using machine
+learning algorithms. IRJMETS, December-2020.
+Wang, H., Peng, J., Huang, F., Wang, J., Chen, J., & Xiao, Y. (2023). MICN: Multi-scale
+local and global context modeling for long-term series forecasting. The eleventh international conference on learning representation
+Wang, S., Wu, H., Shi, X., Hu, T., Luo, H., Ma, L., Zhang, J. Y., & Zhou, J.
+(2024). TimeMixer: Decomposable multiscale mixing for time series forecasting.
+arXiv:2405.14616
+Wang, Y., & Yan, G. (2021). Survey on the application of deep learning in algorithmic
+trading. Data Science in Finance and Economics, 1(4), 345–361.
+Weng, B., Ahmed, M. A., & Megahed, F. M. (2017). Stock market one-day ahead movement
+prediction using disparate data sources. Expert Systems with Applications, 79, 153–163.
+Weng, B., Lu, L., Wang, X., Megahed, F. M., & Martinez, W. (2018). Predicting short-term
+stock prices using ensemble methods and online data sources. Expert Systems with
+Applications, 112, 258–273.
+Willmott, C. J., & Matsuura, K. (2005). Advantages of the mean absolute error (MAE) over
+the root mean square error (RMSE) in assessing average model performance. Climate
+research, 30(1), 79–82.
+Woo, G., Liu, C., Sahoo, D., Kumar, A., & Hoi, S. (2022). Cost: Contrastive
+learning of disentangled seasonal-trend representations for time series forecasting.
+arXiv:2202.01575
+Wu, X., Chen, H., Wang, J., Troiano, L., Loia, V., & Fujita, H. (2020). Adaptive stock
+trading strategies with deep reinforcement learning methods. Information Sciences,
+538, 142–158.
+Yang, H., Liu, X.-Y., Zhong, S., & Walid, A. (2020). Deep reinforcement learning for
+automated stock trading: An ensemble strategy, . (pp. 1–8).
+Zeng, A., Chen, M., Zhang, L., & Xu, Q. (2023). Are transformers eﬀective for time
+series forecasting? Proceedings of the AAAI conference on artiﬁcial intelligence, 37(9),
+11121–11128.
+Zhao, W. X., Zhou, K., Li, J., Tang, T., Wang, X., Hou, Y., Min, Y., Zhang, B., Zhang, J.,
+Dong, Z. et al. (2023). A survey of large language models. arXiv:2303.18223
+Zhou, C., Huang, Y., Cui, K., & Lu, X. (2024). R-DDQN: Optimizing algorithmic trading
+strategies using a reward network in a double DQN. Mathematics, 12(11), 1621.
+Zhou, H., Zhang, S., Peng, J., Zhang, S., Li, J., Xiong, H., & Zhang, W. (2021a). Informer: Beyond eﬃcient transformer for long sequence time-series forecasting. 35(12),
+11106–11115.
+Zhou, W. J., Subagdja, B., Tan, A.-H., & Ong, D. W.-S. (2021b). Hierarchical control of
+multi-agent reinforcement learning team in real-time strategy (RTS) games. Expert
+Systems with Applications, 186, 115707.
+
+The authors declare that they have no known competing ﬁnancial
+interests or personal relationships that could have appeared to inﬂuence
+the work reported in this paper.
+CRediT authorship contribution statement
+Chujin Zhou: Conceptualization, Methodology, Software, Validation, Writing - original draft; Yuling Huang: Writing - original draft,
+Conceptualization; Yuting Kong: Writing - original draft; Xiaoping Lu:
+Writing - review & editing, Supervision.
+Acknowledgements
+We would like to express our sincere gratitude to the anonymous
+reviewers for their insightful comments and valuable suggestions, which
+have signiﬁcantly improved the quality and presentation of this work.
+This work are supported by the Science and Technology Development
+Fund, Macau SAR (File no. 0096/2022/A), and the Zhaoqing University
+Natural Science Fund (File no. 2024BSZ018 and qn202529).
+References
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F. L., Almeida, D.,
+Altenschmidt, J., Altman, S., Anadkat, S. et al. (2023). Gpt-4 technical report.
+arXiv:2303.08774
+de Azevedo Takara, L., Santos, A. A. P., Mariani, V. C., & dos Santos Coelho, L. (2024).
+Deep reinforcement learning applied to a sparse-reward trading environment with intraday data. Expert Systems with Applications, 238, 121897.
+Bai, S., Kolter, J. Z., & Koltun, V. (2018). An empirical evaluation of generic convolutional
+and recurrent networks for sequence modeling. arXiv:1803.01271
+Bishop, C. M., & Nasrabadi, N. M. (2006). Pattern recognition and machine learning
+(vol. 4). Springer.
+Chai, T., & Draxler, R. R. (2014). Root mean square error (RMSE) or mean absolute
+error (MAE)?–Arguments against avoiding RMSE in the literature. Geoscientiﬁc Model
+Development, 7(3), 1247–1250.
+Chen, L., & Gao, Q. (2019). Application of deep reinforcement learning on automated
+stock trading. In 2019 IEEE 10th International conference on software engineering and
+service science (ICSESS) (pp. 29–33). IEEE.
+Cheng, L.-C., & Sun, J.-S. (2024). Multiagent-based deep reinforcement learning framework for multi-asset adaptive trading and portfolio management. Neurocomputing,
+594, 127800.
+Cornalba, F., Disselkamp, C., Scassola, D., & Helf, C. (2024). Multi-objective reward generalization: Improving performance of deep reinforcement learning for applications in
+single-asset trading. Neural Computing and Applications, 36(2), 619–637.
+Dong, J., Wu, H., Zhang, H., Zhang, L., Wang, J., & Long, M. (2024). SimMTM: A simple
+pre-training framework for masked time-series modeling. Advances in Neural Information Processing Systems, 36, 29996–30025.
+Ehret, B., Henning, C., Cervera, M. R., Meulemans, A., Von Oswald, J., & Grewe, B. F.
+(2020). Continual learning in recurrent neural networks. arXiv:2006.12109
+French, R. M. (1999). Catastrophic forgetting in connectionist networks. Trends in Cognitive Sciences, 3(4), 128–135.
+Friedman, E., & Fontaine, F. (2018). Generalizing across multi-objective reward functions
+in deep reinforcement learning. arXiv:1809.06364
+Gemmeke, J. F., Ellis, D. P. W., Freedman, D., Jansen, A., Lawrence, W., Moore, R. C.,
+Plakal, M., & Ritter, M. (2017). Audio set: An ontology and human-labeled dataset
+for audio events, . 2017 IEEE international conference on acoustics, speech and signal
+processing (ICASSP), 29996–30025. IEEE.
+Ghania, M. U., Awaisa, M., & Muzammula, M. (2019). Stock market prediction using machine learning (ML) algorithms. ADCAIJ: Adv Distrib Comput Artif Intell, 8(4), 97–116.
+Grossberg, S. T. (2012). Studies of mind and brain: Neural principles of learning, perception, development, cognition, and motor control, . 70.
+Gulcehre, C., Chandar, S., & Bengio, Y. (2017). Memory augmented neural networks with
+wormhole connections. arXiv:1701.08718
+Gupta, S. C., Singh, S., Kumar, D. et al. (2022). Stock prediction using machine learning
+algorithms. Grenze International Journal of Engineering & Technology (GIJET), 8(1),
+405–414.
+Hodson, T. O. (2022). Root mean square error (RMSE) or mean absolute error (MAE):
+When to use them or not. Geoscientiﬁc Model Development Discussions, 2022, 1–10.
+Huang, Y., Wan, X., Zhang, L., & Lu, X. (2024a). A novel deep reinforcement learning
+framework with biLSTM-attention networks for algorithmic trading. Expert Systems
+with Applications, 240, 122581.
+Huang, Y., Zhou, C., Cui, K., & Lu, X. (2024b). Improving algorithmic trading consistency
+via human alignment and imitation learning. Expert Systems with Applications, 253, p.
+124350.
+Huang, Y., Zhou, C., Cui, K., & Lu, X. (2024c). A multi-agent reinforcement learning framework for optimizing ﬁnancial trading strategies based on timesnet. Expert Systems with
+Applications, 237, 121502.
+17
+
+
