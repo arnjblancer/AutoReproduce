@@ -39,8 +39,11 @@ def compile_latex(latex_code, compile=True, output_filename="output.pdf", timeou
         # If there is an error during LaTeX compilation, return the error message
         return f"[CODE EXECUTION ERROR]: Compilation failed: {e.stderr.decode('utf-8')} {e.output.decode('utf-8')}. There was an error in your latex."
 
-def count_tokens(messages, model="gpt-4"):
-    enc = tiktoken.encoding_for_model(model)
+def count_tokens(messages, model="gpt-5"):
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:
+        enc = tiktoken.get_encoding("o200k_base")
     num_tokens = sum([len(enc.encode(message["content"])) for message in messages])
     return num_tokens
 
@@ -71,8 +74,11 @@ def save_to_file(location, filename, data):
     except Exception as e:
         print(f"Error saving file {filename}: {e}")
 
-def clip_tokens(messages, model="gpt-4", max_tokens=100000):
-    enc = tiktoken.encoding_for_model(model)
+def clip_tokens(messages, model="gpt-5", max_tokens=200000):
+    try:
+        enc = tiktoken.encoding_for_model(model)
+    except KeyError:
+        enc = tiktoken.get_encoding("o200k_base")
     total_tokens = sum([len(enc.encode(message["content"])) for message in messages])
 
     if total_tokens <= max_tokens:

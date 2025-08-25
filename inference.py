@@ -8,7 +8,7 @@ import io
 TOKENS_IN = dict()
 TOKENS_OUT = dict()
 
-encoding = tiktoken.get_encoding("cl100k_base")
+encoding = tiktoken.get_encoding("o200k_base")
 
 def curr_cost_est():
     costmap_in = {
@@ -20,6 +20,7 @@ def curr_cost_est():
         "deepseek-r1": 0.6 / 1000000,
         "o1": 15.00 / 1000000,
         "o3-mini": 0.25 / 1000000,
+        "gpt-5": 5.00 / 1000000,
     }
     costmap_out = {
         "gpt-4o": 10.00/ 1000000,
@@ -29,7 +30,8 @@ def curr_cost_est():
         "deepseek-chat": 1.1 / 1000000,
         "deepseek-r1": 2.2 / 1000000,
         "o1": 60.00 / 1000000,
-        "o3-mini": 1.25 / 1000000
+        "o3-mini": 1.25 / 1000000,
+        "gpt-5": 15.00 / 1000000
     }
     return sum([costmap_in[_]*TOKENS_IN[_] for _ in TOKENS_IN]) + sum([costmap_out[_]*TOKENS_OUT[_] for _ in TOKENS_OUT])
 
@@ -65,6 +67,19 @@ def query_model(model_str, prompt, system_prompt='', tries=5, timeout=5.0, temp=
                 else:
                     completion = client.chat.completions.create(
                         model="gpt-4o-mini", messages=messages, temperature=temp)
+            answer = completion.choices[0].message.content
+        elif model_str == "gpt-5" or model_str == "gpt5":
+            model_str = "gpt-5"
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt}]
+            client = OpenAI(api_key=openai_api_key, base_url=base_url)
+            if temp is None:
+                completion = client.chat.completions.create(
+                    model="gpt-5", messages=messages)
+            else:
+                completion = client.chat.completions.create(
+                    model="gpt-5", messages=messages, temperature=temp)
             answer = completion.choices[0].message.content
         elif model_str == "claude-3.5-sonnet":
                 client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
@@ -228,6 +243,8 @@ def query_model(model_str, prompt, system_prompt='', tries=5, timeout=5.0, temp=
             encoding = tiktoken.encoding_for_model("gpt-4o")
         elif model_str in ["deepseek-chat", "deepseek-r1"]:
             encoding = tiktoken.encoding_for_model("cl100k_base")
+        elif model_str == "gpt-5":
+            encoding = tiktoken.get_encoding("o200k_base")
         else:
             encoding = tiktoken.encoding_for_model(model_str)
         if model_str not in TOKENS_IN:

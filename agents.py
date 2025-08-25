@@ -3,7 +3,7 @@ from tools import *
 from inference import *
 
 class BaseAgent:
-    def __init__(self, model="gpt-4o-mini", notes=None, max_steps=100):
+    def __init__(self, model="gpt-5", notes=None, max_steps=100):
         if notes is None: self.notes = []
         else: self.notes = notes
         self.max_steps = max_steps
@@ -98,7 +98,7 @@ class BaseAgent:
 
 
 class ResearchAgent(BaseAgent):
-    def __init__(self, model="gpt4omini", notes=None, max_steps=100, task_instruction=None):
+    def __init__(self, model="gpt-5", notes=None, max_steps=100, task_instruction=None):
         super().__init__(model, notes, max_steps)
         self.phases = [
             "overall summary",
@@ -232,7 +232,7 @@ class ResearchAgent(BaseAgent):
 
 
 class CodeAgent(BaseAgent):
-    def __init__(self, model="o1-preview", notes=None, max_steps=100, dataloader_code=None, task_instruction=None):
+    def __init__(self, model="gpt-5", notes=None, max_steps=100, dataloader_code=None, task_instruction=None):
         super().__init__(model, notes, max_steps)
         self.phases = [
             "paper lineage",
